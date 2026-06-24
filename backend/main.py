@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 import llm
-from engine import DAYS, SLOTS, FocusModel, ScheduleOptimizer
+from engine import DAYS, SLOTS, FocusModel, ScheduleOptimizer, _is_reserved_block, _reserved_block
 
 app = FastAPI(title="Smart Study Calendar API", version="0.5.0")
 app.add_middleware(
@@ -65,6 +65,7 @@ class Preferences(BaseModel):
 class ProposeRequest(BaseModel):
     tasks: list[Task]
     preferences: Preferences = Field(default_factory=Preferences)
+    committedSchedule: dict | None = None
 
 
 class TasksRequest(BaseModel):
@@ -87,6 +88,16 @@ class ExplainRequest(BaseModel):
 
 
 # ---------- helpers ----------
+def _locked_schedule(grid: dict | None) -> dict:
+    locked = {d: {} for d in DAYS}
+    for d in DAYS:
+        for s, b in (grid or {}).get(d, {}).items():
+            if not _is_reserved_block(b):
+                continue
+            locked[d][s] = _reserved_block(b, d, s)
+    return locked
+
+
 def _plan_list(grid: dict) -> list[dict]:
     out = []
     for d in DAYS:
@@ -118,12 +129,21 @@ def health():
 @app.post("/api/schedule/propose")
 def propose(req: ProposeRequest):
     """Compute a PROPOSED plan. Does not persist - the user must approve it."""
-    opt = ScheduleOptimizer(model, req.preferences.model_dump())
+    prefs = req.preferences.model_dump()
+    locked = _locked_schedule(req.committedSchedule)
+    prefs["lockedSchedule"] = locked
+    opt = ScheduleOptimizer(model, prefs)
     assignment, unplaced, score = opt.solve([t.model_dump() for t in req.tasks])
 
     grid = {d: {s: None for s in SLOTS} for d in DAYS}
+    for d in DAYS:
+        for s, b in locked[d].items():
+            grid[d][s] = b
+
     for (d, s), b in assignment.items():
         if b is None:
+            continue
+        if grid[d].get(s):
             continue
         grid[d][s] = {
             "taskId": b.task_id, "title": b.title, "course": b.course,

@@ -235,6 +235,67 @@ def _deadline_end(deadline: str | None) -> datetime | None:
     return datetime.combine(deadline_date, datetime.max.time())
 
 
+def _minutes(clock: str) -> int:
+    hour, minute = [int(part) for part in clock.split(":")]
+    return hour * 60 + minute
+
+
+def _slots_overlap(first: str, second: str) -> bool:
+    try:
+        first_start, first_end = first.split("-")
+        second_start, second_end = second.split("-")
+        return _minutes(first_start) < _minutes(second_end) and _minutes(second_start) < _minutes(first_end)
+    except (ValueError, IndexError):
+        return first == second
+
+
+def _is_manual_block(block: dict | None) -> bool:
+    return str((block or {}).get("taskId", "")).startswith("manual-")
+
+
+def _is_previously_moved_block(block: dict | None) -> bool:
+    return "You moved this block yourself" in str((block or {}).get("explanation", ""))
+
+
+def _is_stable_locked(block: dict | None) -> bool:
+    if not block:
+        return False
+    if block.get("stableLocked") is False:
+        return False
+    if block.get("stableLocked") is True:
+        return True
+    return _is_manual_block(block) or _is_previously_moved_block(block)
+
+
+def _is_reserved_block(block: dict | None) -> bool:
+    return _is_stable_locked(block) or _is_manual_block(block)
+
+
+def _lock_reason(block: dict) -> str:
+    if block.get("lockReason"):
+        return block["lockReason"]
+    if _is_manual_block(block):
+        return "manual"
+    if _is_previously_moved_block(block):
+        return "user_moved"
+    return "stable"
+
+
+def _reserved_block(block: dict, day: str, slot: str) -> dict:
+    locked = _is_stable_locked(block)
+    next_block = {
+        **block,
+        "day": day,
+        "slot": slot,
+        "stableLocked": locked,
+    }
+    if locked:
+        next_block["lockReason"] = _lock_reason(block)
+    else:
+        next_block.pop("lockReason", None)
+    return next_block
+
+
 def _split(task: dict) -> list[Block]:
     n = max(1, math.ceil(float(task.get("estimatedHours", BLOCK_HOURS)) / BLOCK_HOURS))
     return [
@@ -256,6 +317,8 @@ class ScheduleOptimizer:
         self.max_per_day = int(prefs.get("maxBlocksPerDay", 3))
         self.week_monday = self._monday(prefs.get("weekStart"))
         self.now = datetime.now()
+        self.locked_slots = self._locked_slots(prefs.get("lockedSchedule"))
+        self.locked_task_parts = self._locked_task_parts(self.locked_slots)
 
     @staticmethod
     def _monday(week_start: str | None) -> date:
@@ -275,6 +338,8 @@ class ScheduleOptimizer:
 
         # Hard constraint: generated schedules must fit between now and deadline.
         if not self._fits_time_window(block, day, slot):
+            return -1e9
+        if self._overlaps_locked(day, slot):
             return -1e9
 
         # 1. learned focus probability, weighted by difficulty
@@ -317,6 +382,36 @@ class ScheduleOptimizer:
             return False
         return True
 
+    @staticmethod
+    def _locked_slots(schedule: dict | None) -> list[tuple[str, str, dict]]:
+        locked = []
+        for day in DAYS:
+            for slot, block in (schedule or {}).get(day, {}).items():
+                if not _is_reserved_block(block):
+                    continue
+                locked.append((day, slot, _reserved_block(block, day, slot)))
+        return locked
+
+    def _overlaps_locked(self, day: str, slot: str) -> bool:
+        return any(
+            locked_day == day and _slots_overlap(locked_slot, slot)
+            for locked_day, locked_slot, _block in self.locked_slots
+        )
+
+    @staticmethod
+    def _locked_task_parts(locked_slots: list[tuple[str, str, dict]]) -> dict[str, set[int]]:
+        parts: dict[str, set[int]] = {}
+        for _day, _slot, block in locked_slots:
+            task_id = block.get("taskId")
+            if task_id is None or _is_manual_block(block):
+                continue
+            try:
+                part = int(block.get("part", 1))
+            except (TypeError, ValueError):
+                part = 1
+            parts.setdefault(str(task_id), set()).add(part)
+        return parts
+
     # --- construction + local search --------------------------------------
     def solve(self, tasks: list[dict], iters: int = 800, seed: int = 7):
         rng = random.Random(seed)
@@ -324,7 +419,8 @@ class ScheduleOptimizer:
         for t in tasks:
             if t.get("status") == "Completed":
                 continue
-            blocks.extend(_split(t))
+            locked_parts = self.locked_task_parts.get(str(t.get("id")), set())
+            blocks.extend([b for b in _split(t) if b.part not in locked_parts])
 
         # most constrained / most urgent first
         def order_key(b: Block):
@@ -341,6 +437,8 @@ class ScheduleOptimizer:
             best, best_u = None, -1e8
             for (d, s), occ in assignment.items():
                 if occ is not None:
+                    continue
+                if self._overlaps_locked(d, s):
                     continue
                 u = self.utility(b, d, s, assignment)
                 if u > best_u:
@@ -379,9 +477,12 @@ class ScheduleOptimizer:
             b = assignment[cell]
             if b is not None:
                 per_task.setdefault(b.task_id, []).append(b)
-        for blocks_of_task in per_task.values():
+        for task_id, blocks_of_task in per_task.items():
+            locked_parts = self.locked_task_parts.get(str(task_id), set())
+            available_parts = [part for part in range(1, blocks_of_task[0].parts + 1) if part not in locked_parts]
             for i, b in enumerate(blocks_of_task, start=1):
-                b.part = i
+                if i <= len(available_parts):
+                    b.part = available_parts[i - 1]
 
         # explanations
         for (d, s), b in assignment.items():

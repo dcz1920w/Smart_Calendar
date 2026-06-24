@@ -93,8 +93,98 @@ function hasSlotConflict(schedule, day, slot, ignoredSlot = null) {
   );
 }
 
+function isManualBlock(block) {
+  return String(block?.taskId ?? "").startsWith("manual-");
+}
+
+function isPreviouslyMovedBlock(block) {
+  return String(block?.explanation ?? "").includes("You moved this block yourself");
+}
+
+function isStableLocked(block) {
+  if (!block) return false;
+  if (block.stableLocked === false) return false;
+  if (block.stableLocked === true) return true;
+  return isManualBlock(block) || isPreviouslyMovedBlock(block);
+}
+
+function getLockReason(block) {
+  if (!isStableLocked(block)) return null;
+  if (block.lockReason) return block.lockReason;
+  if (isManualBlock(block)) return "manual";
+  if (isPreviouslyMovedBlock(block)) return "user_moved";
+  return "stable";
+}
+
+function isReservedForProposal(block) {
+  return isStableLocked(block) || isManualBlock(block);
+}
+
+function normalizeReservedBlock(block, day, slot) {
+  const locked = isStableLocked(block);
+  const next = {
+    ...block,
+    day,
+    slot,
+    stableLocked: locked,
+  };
+  if (locked) {
+    next.lockReason = getLockReason(block);
+  } else {
+    delete next.lockReason;
+  }
+  return next;
+}
+
+function lockedScheduleFrom(schedule) {
+  const locked = normalizeSchedule(null);
+  iterateSchedule(schedule, (day, slot, block) => {
+    if (!isReservedForProposal(block)) return;
+    locked[day][slot] = normalizeReservedBlock(block, day, slot);
+  });
+  return locked;
+}
+
+function hasLockedConflict(schedule, day, slot, ignoredSlot = null) {
+  return Object.entries(schedule?.[day] ?? {}).some(
+    ([existingSlot, block]) =>
+      block &&
+      isReservedForProposal(block) &&
+      existingSlot !== ignoredSlot &&
+      slotsOverlap(existingSlot, slot)
+  );
+}
+
+function mergeLockedSchedules(schedule, committed) {
+  const next = normalizeSchedule(schedule);
+  iterateSchedule(committed, (day, slot, block) => {
+    if (!isReservedForProposal(block)) return;
+    next[day][slot] = normalizeReservedBlock(block, day, slot);
+  });
+  const reserved = lockedScheduleFrom(committed);
+  iterateSchedule(next, (day, slot, block) => {
+    if (isReservedForProposal(block)) return;
+    if (!hasLockedConflict(reserved, day, slot)) return;
+    delete next[day][slot];
+  });
+  return next;
+}
+
+function lockedTaskPartsFrom(schedule) {
+  const locked = {};
+  iterateSchedule(schedule, (_day, _slot, block) => {
+    if (!isStableLocked(block) || isManualBlock(block) || block.taskId == null) return;
+    const part = Number(block.part ?? 1);
+    if (!Number.isFinite(part)) return;
+    const taskId = String(block.taskId);
+    locked[taskId] = locked[taskId] ?? new Set();
+    locked[taskId].add(part);
+  });
+  return locked;
+}
+
 function getCalendarEventColors(block) {
-  if (String(block.taskId ?? "").startsWith("manual-")) {
+  if (isManualBlock(block)) {
     return {
       backgroundColor: "#e0f2fe",
       borderColor: "#7dd3fc",
@@ -146,6 +236,44 @@ function generatedBlockFitsWindow(task, day, slot, now = new Date()) {
   const deadlineEnd = deadlineEndDate(task.deadline);
   if (deadlineEnd && end > deadlineEnd) return false;
   return true;
+}
+
+function hoursFromSlot(slot) {
+  const [start, end] = slot.split("-");
+  if (!start || !end) return 1.5;
+  let minutes = minutesFromClock(end) - minutesFromClock(start);
+  if (minutes <= 0) minutes += 24 * 60;
+  return Math.round((minutes / 60) * 100) / 100;
+}
+
+function calendarTaskViewsFromSchedule(schedule) {
+  const items = [];
+  iterateSchedule(schedule, (day, slot, block) => {
+    if (!isManualBlock(block)) return;
+    items.push({
+      id: block.taskId,
+      title: block.title,
+      course: block.course || "Custom Study",
+      deadline: "",
+      estimatedHours: hoursFromSlot(slot),
+      difficulty: block.difficulty || "Medium",
+      priority: block.priority || "Medium",
+      status: block.status || "Scheduled",
+      source: "Calendar",
+      scheduledDay: day,
+      scheduledSlot: slot,
+    });
+  });
+  return items.sort((a, b) => {
+    const dayDiff = dayIndexes[a.scheduledDay] - dayIndexes[b.scheduledDay];
+    if (dayDiff !== 0) return dayDiff;
+    return minutesFromClock(a.scheduledSlot.split("-")[0]) - minutesFromClock(b.scheduledSlot.split("-")[0]);
+  });
+}
+
+function taskViewsFrom(tasks, schedule) {
+  const normalTasks = tasks.map((task) => ({ ...task, source: "Tasks" }));
+  return [...normalTasks, ...calendarTaskViewsFromSchedule(schedule)];
 }
 
 function dayFromDate(date, weekStart = startOfCurrentWeek()) {
@@ -261,16 +389,23 @@ function splitTaskIntoBlocks(task) {
   }));
 }
 
-function generateLocalProposal(tasks) {
+function generateLocalProposal(tasks, committedSchedule = null) {
   const sortedTasks = [...tasks]
     .filter((task) => task.status !== "Completed")
     .sort((a, b) => getPriorityScore(b) - getPriorityScore(a));
 
-  const blocks = sortedTasks.flatMap(splitTaskIntoBlocks);
-  const schedule = {};
+  const lockedParts = lockedTaskPartsFrom(committedSchedule);
+  const blocks = sortedTasks.flatMap((task) =>
+    splitTaskIntoBlocks(task).filter(
+      (block) => !(lockedParts[String(block.taskId)] ?? new Set()).has(block.part)
+    )
+  );
+  const schedule = lockedScheduleFrom(committedSchedule);
   days.forEach((day) => {
-    schedule[day] = {};
-    timeSlots.forEach((slot) => (schedule[day][slot] = null));
+    schedule[day] = schedule[day] ?? {};
+    timeSlots.forEach((slot) => {
+      schedule[day][slot] = schedule[day][slot] ?? null;
+    });
   });
 
   for (const block of blocks) {
@@ -278,6 +413,7 @@ function generateLocalProposal(tasks) {
     for (const day of days) {
       for (const slot of timeSlots) {
         if (!generatedBlockFitsWindow(block, day, slot)) continue;
+        if (hasLockedConflict(schedule, day, slot)) continue;
         const isMorning = slot === "09:00-10:30" || slot === "10:30-12:00";
         if (block.difficulty === "Hard" && !isMorning) continue;
         if (!schedule[day][slot]) {
@@ -292,6 +428,7 @@ function generateLocalProposal(tasks) {
       outer: for (const day of days) {
         for (const slot of timeSlots) {
           if (!generatedBlockFitsWindow(block, day, slot)) continue;
+          if (hasLockedConflict(schedule, day, slot)) continue;
           if (!schedule[day][slot]) {
             schedule[day][slot] = { ...block, day, slot };
             break outer;
@@ -499,19 +636,29 @@ export default function App() {
     let total = 0;
     let completed = 0;
     let skipped = 0;
-    if (!committed) return { total: 0, completed: 0, skipped: 0, completionRate: 0 };
+    let calendarCreated = 0;
+    let protectedBlocks = 0;
+    if (!committed) {
+      return { total: 0, completed: 0, skipped: 0, calendarCreated: 0, protectedBlocks: 0, completionRate: 0 };
+    }
     iterateSchedule(committed, (_day, _slot, block) => {
       total++;
       if (block.status === "Completed") completed++;
       if (block.status === "Skipped") skipped++;
+      if (isManualBlock(block)) calendarCreated++;
+      if (isReservedForProposal(block)) protectedBlocks++;
     });
     return {
       total,
       completed,
       skipped,
+      calendarCreated,
+      protectedBlocks,
       completionRate: total === 0 ? 0 : Math.round((completed / total) * 100),
     };
   }, [committed]);
+
+  const taskViews = useMemo(() => taskViewsFrom(tasks, committed), [tasks, committed]);
 
   function persistCommitted(next) {
     setCommitted(next);
@@ -561,13 +708,11 @@ export default function App() {
     setGenerating(true);
     setPlanQA(null);
     try {
-      const data = await proposePlan(tasks, prefs);
-      const grid = {};
+      const data = await proposePlan(tasks, prefs, committed);
+      const grid = mergeLockedSchedules(data.proposal, committed);
       days.forEach((day) => {
-        grid[day] = {};
-        timeSlots.forEach((slot) => {
-          const b = data.proposal[day][slot];
-          grid[day][slot] = b ? { ...b, day, slot } : null;
+        Object.entries(grid[day]).forEach(([slot, block]) => {
+          grid[day][slot] = block ? { ...block, day, slot } : null;
         });
       });
       setProposal({
@@ -583,7 +728,7 @@ export default function App() {
     } catch {
       setBackendOnline(false);
       setProposal({
-        schedule: generateLocalProposal(tasks),
+        schedule: generateLocalProposal(tasks, committed),
         summary:
           "Generated with the local fallback heuristic because the Python engine was unreachable. Review and approve to apply it.",
         summarySource: "template",
@@ -626,11 +771,14 @@ export default function App() {
       alert("That time overlaps another schedule. Move or resize to an open time.");
       return false;
     }
+    const shouldLockAfterMove = !isManualBlock(sourceBlock);
     delete updated[sourceDay][sourceSlot];
     updated[targetDay][targetSlot] = {
       ...sourceBlock,
       day: targetDay,
       slot: targetSlot,
+      stableLocked: shouldLockAfterMove ? true : sourceBlock.stableLocked,
+      lockReason: shouldLockAfterMove ? "user_moved" : sourceBlock.lockReason,
       explanation:
         "You moved this block yourself - the assistant keeps your choice (you stay in control).",
     };
@@ -668,18 +816,48 @@ export default function App() {
       status: "Scheduled",
       day,
       slot,
+      stableLocked: true,
+      lockReason: "manual",
       explanation: "You added this schedule directly to the calendar.",
       scoreBreakdown: {},
     };
     persistCommitted(updated);
     setScheduleDraft(null);
-    setRecommendation("Schedule added. You can drag or stretch it to fine-tune the time.");
+    setRecommendation("Schedule added and protected from future proposals.");
     return true;
+  }
+
+  function unlockBlock(day, slot) {
+    if (!committed) return;
+    const updated = normalizeSchedule(structuredClone(committed));
+    if (!updated[day]?.[slot]) return;
+    updated[day][slot] = {
+      ...updated[day][slot],
+      stableLocked: false,
+    };
+    delete updated[day][slot].lockReason;
+    persistCommitted(updated);
+    setSelectedBlock(null);
+    setRecommendation("Schedule unlocked for future proposals. You can still drag or stretch it anytime.");
+  }
+
+  function lockBlock(day, slot) {
+    if (!committed) return;
+    const updated = normalizeSchedule(structuredClone(committed));
+    if (!updated[day]?.[slot]) return;
+    updated[day][slot] = {
+      ...updated[day][slot],
+      stableLocked: true,
+      lockReason: isManualBlock(updated[day][slot]) ? "manual" : "user_moved",
+    };
+    persistCommitted(updated);
+    setSelectedBlock(null);
+    setRecommendation("Schedule locked against future proposals. You can still drag or stretch it.");
   }
 
   async function updateBlockStatus(day, slot, status) {
     if (!committed) return;
-    const updated = structuredClone(committed);
+    const updated = normalizeSchedule(structuredClone(committed));
     if (updated[day]?.[slot]) updated[day][slot].status = status;
     persistCommitted(updated);
 
@@ -793,8 +971,8 @@ export default function App() {
           </header>
 
           {activePage === "Dashboard" && (
-            <DashboardPage
-              tasks={tasks}
+              <DashboardPage
+              tasks={taskViews}
               analytics={analytics}
               recommendation={recommendation}
               handlePropose={handlePropose}
@@ -806,10 +984,10 @@ export default function App() {
           )}
 
           {activePage === "Tasks" && (
-            <TasksPage
+              <TasksPage
               form={form}
               setForm={setForm}
-              tasks={tasks}
+              tasks={taskViews}
               handleAddTask={handleAddTask}
               handleDeleteTask={handleDeleteTask}
               handlePropose={handlePropose}
@@ -847,6 +1025,8 @@ export default function App() {
                     updateBlockStatus(selectedBlock.day, selectedBlock.slot, status);
                     setSelectedBlock(null);
                   }}
+                  onUnlock={() => unlockBlock(selectedBlock.day, selectedBlock.slot)}
+                  onLock={() => lockBlock(selectedBlock.day, selectedBlock.slot)}
                 />
               )}
               {scheduleDraft && (
@@ -860,9 +1040,9 @@ export default function App() {
           )}
 
           {activePage === "Analytics" && (
-            <AnalyticsPage
-              analytics={analytics}
-              tasks={tasks}
+              <AnalyticsPage
+                analytics={analytics}
+              tasks={taskViews}
               heatmap={heatmap}
               modelEvents={modelEvents}
               backendOnline={backendOnline}
@@ -914,7 +1094,7 @@ function DashboardPage({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <StatCard number={analytics.completionRate + "%"} label="Completed" />
           <StatCard number={tasks.length} label="Tasks" />
-          <StatCard number={analytics.skipped} label="Skipped Blocks" />
+          <StatCard number={analytics.calendarCreated} label="Calendar Items" />
         </div>
 
         <div className="bg-slate-50 border border-slate-200 rounded-3xl p-5 mb-6 shadow-sm">
@@ -958,7 +1138,16 @@ function DashboardPage({
               <div className="text-sm text-slate-600">
                 {task.course} · {task.difficulty} · {task.priority}
               </div>
-              <div className="text-xs text-slate-500 mt-1">Deadline: {task.deadline}</div>
+              <div className="text-xs text-slate-500 mt-1">
+                {task.source === "Calendar"
+                  ? `Scheduled: ${task.scheduledDay} ${task.scheduledSlot}`
+                  : `Deadline: ${task.deadline}`}
+              </div>
+                {task.source === "Calendar" && (
+                  <div className="mt-2 inline-flex rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-800">
+                    Calendar
+                  </div>
+                )}
             </div>
           ))}
         </div>
@@ -1084,16 +1273,29 @@ function TasksPage({
                   {task.course} · {task.difficulty} · {task.priority}
                 </div>
                 <div className="text-xs text-slate-500 mt-1">
-                  Deadline: {task.deadline} · {task.estimatedHours}h
+                  {task.source === "Calendar"
+                    ? `Scheduled: ${task.scheduledDay} ${task.scheduledSlot} · ${task.estimatedHours}h`
+                    : `Deadline: ${task.deadline} · ${task.estimatedHours}h`}
                 </div>
+                {task.source === "Calendar" && (
+                  <div className="mt-2 inline-flex rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-800">
+                    Calendar-created
+                  </div>
+                )}
               </div>
 
-              <button
-                onClick={() => handleDeleteTask(task.id)}
-                className="border border-red-300 text-red-600 rounded-2xl px-4 py-2 text-sm font-semibold transition hover:bg-red-50"
-              >
-                Delete
-              </button>
+              {task.source === "Calendar" ? (
+                <span className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-500">
+                  Edit on calendar
+                </span>
+              ) : (
+                <button
+                  onClick={() => handleDeleteTask(task.id)}
+                  className="border border-red-300 text-red-600 rounded-2xl px-4 py-2 text-sm font-semibold transition hover:bg-red-50"
+                >
+                  Delete
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -1199,7 +1401,23 @@ function ScheduleModal({ draft, onClose, onSave }) {
   );
 }
 
-function TaskModal({ block, isProposed, explainState, onAskWhy, onClose, onStatusChange }) {
+function TaskModal({
+  block,
+  isProposed,
+  explainState,
+  onAskWhy,
+  onClose,
+  onStatusChange,
+  onUnlock,
+  onLock,
+}) {
+  const locked = isStableLocked(block);
+  const canLockAgain = !locked && isManualBlock(block);
+  const lockText =
+    getLockReason(block) === "manual"
+      ? "Protected manual schedule"
+      : "Protected from future proposals";
+
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm">
       <div className="bg-white rounded-[2rem] shadow-2xl p-8 max-w-md w-full mx-4 border border-slate-200 max-h-[90vh] overflow-y-auto">
@@ -1208,6 +1426,12 @@ function TaskModal({ block, isProposed, explainState, onAskWhy, onClose, onStatu
           {block.title}
           <span className="ml-2 text-slate-400">· {block.day} {block.slot}</span>
         </p>
+
+        {locked && !isProposed && (
+          <div className="mb-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-900">
+            {lockText}
+          </div>
+        )}
 
         <FactChips block={block} />
 
@@ -1247,19 +1471,37 @@ function TaskModal({ block, isProposed, explainState, onAskWhy, onClose, onStatu
             plan to add it to your calendar.
           </div>
         ) : (
-          <div className="flex gap-3">
-            <button
-              onClick={() => onStatusChange("Completed")}
-              className="flex-1 bg-slate-950 text-white rounded-2xl px-4 py-3 font-semibold transition hover:-translate-y-0.5 hover:shadow-md"
-            >
-              Mark Done
-            </button>
-            <button
-              onClick={() => onStatusChange("Skipped")}
-              className="flex-1 bg-white border border-slate-200 text-slate-900 rounded-2xl px-4 py-3 font-semibold transition hover:bg-slate-50"
-            >
-              Skip
-            </button>
+          <div className="space-y-3">
+            <div className="flex gap-3">
+              <button
+                onClick={() => onStatusChange("Completed")}
+                className="flex-1 bg-slate-950 text-white rounded-2xl px-4 py-3 font-semibold transition hover:-translate-y-0.5 hover:shadow-md"
+              >
+                Mark Done
+              </button>
+              <button
+                onClick={() => onStatusChange("Skipped")}
+                className="flex-1 bg-white border border-slate-200 text-slate-900 rounded-2xl px-4 py-3 font-semibold transition hover:bg-slate-50"
+              >
+                Skip
+              </button>
+            </div>
+            {locked && (
+              <button
+                onClick={onUnlock}
+                className="w-full rounded-2xl border border-sky-300 bg-white px-4 py-3 font-semibold text-sky-800 transition hover:bg-sky-50"
+              >
+                Allow proposals to change this
+              </button>
+            )}
+            {canLockAgain && (
+              <button
+                onClick={onLock}
+                className="w-full rounded-2xl border border-sky-300 bg-sky-700 px-4 py-3 font-semibold text-white transition hover:bg-sky-800"
+              >
+                Protect from proposals
+              </button>
+            )}
           </div>
         )}
 
@@ -1370,19 +1612,34 @@ function CalendarPage({
         start,
         end,
         ...colors,
+        editable: draggable,
+        startEditable: draggable,
+        durationEditable: draggable,
         classNames: [
           "study-event",
           String(block.taskId ?? "").startsWith("manual-") ? "difficulty-manual" : "",
           `difficulty-${(block.difficulty ?? "medium").toLowerCase()}`,
+          isStableLocked(block) ? "is-locked" : "",
           kind ? `proposal-${kind}` : "",
           block.status === "Completed" ? "is-completed" : "",
           block.status === "Skipped" ? "is-skipped" : "",
         ].filter(Boolean),
-        extendedProps: { block: { ...block, day, slot }, day, slot, kind },
+        extendedProps: {
+          block: {
+            ...block,
+            day,
+            slot,
+            stableLocked: isStableLocked(block),
+            lockReason: getLockReason(block),
+          },
+          day,
+          slot,
+          kind,
+        },
       });
     });
     return events;
-  }, [schedule, diff, weekStart]);
+  }, [schedule, diff, weekStart, draggable]);
 
   useEffect(() => {
     const api = calendarRef.current?.getApi();
@@ -1446,6 +1703,8 @@ function CalendarPage({
               ? "Done"
               : block.status === "Skipped"
               ? "Skipped"
+              : isStableLocked(block)
+              ? "Locked"
               : isProposal
               ? "Proposed"
               : "Click for details"}
@@ -1693,6 +1952,8 @@ function AnalyticsPage({ analytics, tasks, heatmap, modelEvents, backendOnline }
           <h3 className="font-bold text-xl mb-4 text-slate-950">Workload Summary</h3>
           <div className="space-y-3">
             <StatCard number={tasks.length} label="Total Tasks" />
+            <StatCard number={analytics.calendarCreated} label="Calendar-Created" />
+            <StatCard number={analytics.protectedBlocks} label="Protected Blocks" />
             <StatCard number={hardTasks} label="Hard Tasks" />
             <StatCard number={highPriorityTasks} label="High Priority Tasks" />
           </div>

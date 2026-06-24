@@ -20,10 +20,10 @@ export async function checkHealth() {
   }
 }
 
-export function proposePlan(tasks, preferences) {
+export function proposePlan(tasks, preferences, committedSchedule = null) {
   return request("/schedule/propose", {
     method: "POST",
-    body: JSON.stringify({ tasks, preferences }),
+    body: JSON.stringify({ tasks, preferences, committedSchedule }),
   });
 }
 
