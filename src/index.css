@@ -1,0 +1,281 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    min-height: 100vh;
+    background-color: #f8fafc;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: #0f172a;
+    margin: 0;
+    background-image: radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), transparent 30%), radial-gradient(circle at bottom right, rgba(34, 197, 94, 0.12), transparent 22%);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  }
+
+  ::selection {
+    background: rgba(56, 189, 248, 0.22);
+    color: #0f172a;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.04);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(15, 23, 42, 0.18);
+    border-radius: 9999px;
+  }
+}
+
+@layer components {
+  .study-calendar {
+    --fc-border-color: #e2e8f0;
+    --fc-page-bg-color: #ffffff;
+    --fc-neutral-bg-color: #f8fafc;
+    --fc-today-bg-color: rgba(6, 182, 212, 0.08);
+    --fc-now-indicator-color: #0891b2;
+    --fc-event-border-color: transparent;
+    --fc-event-text-color: #0f172a;
+    color: #0f172a;
+  }
+
+  .study-calendar .fc {
+    font-family: inherit;
+  }
+
+  .study-calendar .fc-toolbar {
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .study-calendar .fc-toolbar-title {
+    font-size: 1.05rem;
+    font-weight: 800;
+    letter-spacing: 0;
+    color: #0f172a;
+  }
+
+  .study-calendar .fc-button {
+    border: 1px solid #cbd5e1;
+    border-radius: 0.85rem;
+    background: #ffffff;
+    color: #334155;
+    box-shadow: none;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: capitalize;
+  }
+
+  .study-calendar .fc-button:hover,
+  .study-calendar .fc-button:focus {
+    border-color: #0891b2;
+    background: #ecfeff;
+    color: #155e75;
+  }
+
+  .study-calendar .fc-button-primary:not(:disabled).fc-button-active {
+    border-color: #0f172a;
+    background: #0f172a;
+    color: #ffffff;
+  }
+
+  .study-calendar .fc-col-header-cell {
+    background: #0f172a;
+    padding: 0.35rem 0;
+  }
+
+  .study-calendar .fc-col-header-cell-cushion {
+    color: #ffffff;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0;
+    text-decoration: none;
+  }
+
+  .study-calendar .fc-timegrid-slot {
+    height: 2.4rem;
+  }
+
+  .study-calendar .fc-timegrid-axis-cushion,
+  .study-calendar .fc-timegrid-slot-label-cushion {
+    color: #64748b;
+    font-size: 0.74rem;
+    font-weight: 700;
+  }
+
+  .study-calendar .fc-event {
+    border-radius: 0.9rem;
+    box-shadow: 0 14px 28px -22px rgba(15, 23, 42, 0.7);
+    overflow: hidden;
+  }
+
+  .study-calendar .study-event {
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    cursor: pointer;
+  }
+
+  .study-calendar .fc-event-main {
+    color: inherit;
+    height: 100%;
+  }
+
+  .study-calendar .fc-study-content {
+    display: flex;
+    min-height: 100%;
+    flex-direction: column;
+    gap: 0.18rem;
+    padding: 0.5rem 0.6rem;
+    line-height: 1.18;
+  }
+
+  .study-calendar .fc-study-topline,
+  .study-calendar .fc-study-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.35rem;
+    font-size: 0.68rem;
+    font-weight: 800;
+    color: rgba(15, 23, 42, 0.64);
+  }
+
+  .study-calendar .fc-study-course {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.82rem;
+    font-weight: 800;
+  }
+
+  .study-calendar .fc-study-title {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 0.74rem;
+    color: #475569;
+  }
+
+  .study-calendar .fc-month-study-content {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.25rem;
+    padding: 0.14rem 0.35rem;
+    line-height: 1.15;
+  }
+
+  .study-calendar .fc-month-study-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+
+  .study-calendar .fc-daygrid-event {
+    border-radius: 0.45rem;
+    margin-top: 0.1rem;
+  }
+
+  .study-calendar .fc-event.difficulty-hard,
+  .study-calendar .fc-v-event.difficulty-hard,
+  .study-calendar .fc-daygrid-event.difficulty-hard {
+    border-color: #fb7185 !important;
+    background: #fff1f2 !important;
+    background-color: #fff1f2 !important;
+  }
+
+  .study-calendar .fc-event.difficulty-medium,
+  .study-calendar .fc-v-event.difficulty-medium,
+  .study-calendar .fc-daygrid-event.difficulty-medium {
+    border-color: #facc15 !important;
+    background: #fef9c3 !important;
+    background-color: #fef9c3 !important;
+  }
+
+  .study-calendar .fc-event.difficulty-easy,
+  .study-calendar .fc-v-event.difficulty-easy,
+  .study-calendar .fc-daygrid-event.difficulty-easy {
+    border-color: #4ade80 !important;
+    background: #dcfce7 !important;
+    background-color: #dcfce7 !important;
+  }
+
+  .study-calendar .fc-event.difficulty-manual,
+  .study-calendar .fc-v-event.difficulty-manual,
+  .study-calendar .fc-daygrid-event.difficulty-manual {
+    border-color: #7dd3fc !important;
+    background: #e0f2fe !important;
+    background-color: #e0f2fe !important;
+  }
+
+  .study-calendar .proposal-new,
+  .study-calendar .proposal-changed {
+    box-shadow: inset 0 0 0 2px #f59e0b, 0 14px 28px -22px rgba(15, 23, 42, 0.7);
+  }
+
+  .study-calendar .is-completed {
+    background: #f0fdf4;
+    opacity: 0.82;
+  }
+
+  .study-calendar .is-skipped {
+    background: #f8fafc;
+    opacity: 0.7;
+  }
+
+  .study-calendar .fc-highlight {
+    background: rgba(6, 182, 212, 0.16);
+  }
+
+  @media (max-width: 720px) {
+    .study-calendar .fc-toolbar {
+      flex-direction: column;
+    }
+
+    .study-calendar .fc-toolbar-chunk {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+    }
+
+    .study-calendar .fc-button {
+      padding: 0.35rem 0.55rem;
+      font-size: 0.72rem;
+    }
+
+    .study-calendar .fc-study-title {
+      display: none;
+    }
+  }
+}

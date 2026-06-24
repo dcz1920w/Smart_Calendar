@@ -1,0 +1,204 @@
+{
+ "Mon": {
+  "09:00-10:30": null,
+  "10:30-12:00": null,
+  "14:00-15:30": null,
+  "16:00-17:30": null,
+  "19:00-20:30": null
+ },
+ "Tue": {
+  "09:00-10:30": null,
+  "10:30-12:00": null,
+  "14:00-15:30": null,
+  "16:00-17:30": null,
+  "19:00-20:30": null
+ },
+ "Wed": {
+  "09:00-10:30": null,
+  "10:30-12:00": null,
+  "14:00-15:30": null,
+  "16:00-17:30": null,
+  "19:00-20:30": null
+ },
+ "Thu": {
+  "09:00-10:30": {
+   "taskId": 1,
+   "title": "Data Modeling Exam Review",
+   "course": "Data Modeling",
+   "difficulty": "Hard",
+   "priority": "High",
+   "part": 1,
+   "parts": 3,
+   "status": "Proposed",
+   "explanation": "Placed here because you complete 91% of blocks here (based on 4 past observations); hard task placed in your preferred morning focus window; deadline in 2 days (2026-06-27); session 1 of 3 - spaced over the week for better retention.",
+   "scoreBreakdown": {
+    "p_complete": 0.91,
+    "observations": 4,
+    "days_to_deadline": 2
+   },
+   "day": "Thu",
+   "slot": "09:00-10:30"
+  },
+  "10:30-12:00": {
+   "taskId": 4,
+   "title": "IUI Milestone Presentation",
+   "course": "Intelligent User Interfaces",
+   "difficulty": "Hard",
+   "priority": "High",
+   "part": 1,
+   "parts": 2,
+   "status": "Proposed",
+   "explanation": "Placed here because estimated 82% completion chance here (no data yet - prior only); hard task placed in your preferred morning focus window; deadline in 1 day (2026-06-26); session 1 of 2 - spaced over the week for better retention.",
+   "scoreBreakdown": {
+    "p_complete": 0.82,
+    "observations": 0,
+    "days_to_deadline": 1
+   },
+   "day": "Thu",
+   "slot": "10:30-12:00"
+  },
+  "14:00-15:30": {
+   "taskId": 3,
+   "title": "German Vocabulary Practice",
+   "course": "German",
+   "difficulty": "Easy",
+   "priority": "Low",
+   "part": 1,
+   "parts": 2,
+   "status": "Proposed",
+   "explanation": "Placed here because you complete 61% of blocks here (based on 3 past observations); session 1 of 2 - spaced over the week for better retention.",
+   "scoreBreakdown": {
+    "p_complete": 0.61,
+    "observations": 3,
+    "days_to_deadline": 6
+   },
+   "day": "Thu",
+   "slot": "14:00-15:30"
+  },
+  "16:00-17:30": null,
+  "19:00-20:30": null
+ },
+ "Fri": {
+  "09:00-10:30": {
+   "taskId": 1,
+   "title": "Data Modeling Exam Review",
+   "course": "Data Modeling",
+   "difficulty": "Hard",
+   "priority": "High",
+   "part": 2,
+   "parts": 3,
+   "status": "Proposed",
+   "explanation": "Placed here because estimated 82% completion chance here (no data yet - prior only); hard task placed in your preferred morning focus window; deadline in 1 day (2026-06-27); session 2 of 3 - spaced over the week for better retention.",
+   "scoreBreakdown": {
+    "p_complete": 0.82,
+    "observations": 0,
+    "days_to_deadline": 1
+   },
+   "day": "Fri",
+   "slot": "09:00-10:30"
+  },
+  "10:30-12:00": {
+   "taskId": 4,
+   "title": "IUI Milestone Presentation",
+   "course": "Intelligent User Interfaces",
+   "difficulty": "Hard",
+   "priority": "High",
+   "part": 2,
+   "parts": 2,
+   "status": "Proposed",
+   "explanation": "Placed here because estimated 82% completion chance here (no data yet - prior only); hard task placed in your preferred morning focus window; deadline in 0 days (2026-06-26); session 2 of 2 - spaced over the week for better retention.",
+   "scoreBreakdown": {
+    "p_complete": 0.82,
+    "observations": 0,
+    "days_to_deadline": 0
+   },
+   "day": "Fri",
+   "slot": "10:30-12:00"
+  },
+  "14:00-15:30": null,
+  "16:00-17:30": null,
+  "19:00-20:30": null
+ },
+ "Sat": {
+  "09:00-10:30": {
+   "taskId": 1,
+   "title": "Data Modeling Exam Review",
+   "course": "Data Modeling",
+   "difficulty": "Hard",
+   "priority": "High",
+   "part": 3,
+   "parts": 3,
+   "status": "Proposed",
+   "explanation": "Placed here because estimated 82% completion chance here (no data yet - prior only); hard task placed in your preferred morning focus window; deadline in 0 days (2026-06-27); session 3 of 3 - spaced over the week for better retention.",
+   "scoreBreakdown": {
+    "p_complete": 0.82,
+    "observations": 0,
+    "days_to_deadline": 0
+   },
+   "day": "Sat",
+   "slot": "09:00-10:30"
+  },
+  "10:30-12:00": {
+   "taskId": 2,
+   "title": "Philosophy Reading: Kant, Ch. 4-6",
+   "course": "Philosophy",
+   "difficulty": "Medium",
+   "priority": "Medium",
+   "part": 1,
+   "parts": 2,
+   "status": "Proposed",
+   "explanation": "Placed here because estimated 82% completion chance here (no data yet - prior only); deadline in 2 days (2026-06-29); session 1 of 2 - spaced over the week for better retention.",
+   "scoreBreakdown": {
+    "p_complete": 0.82,
+    "observations": 0,
+    "days_to_deadline": 2
+   },
+   "day": "Sat",
+   "slot": "10:30-12:00"
+  },
+  "14:00-15:30": null,
+  "16:00-17:30": null,
+  "19:00-20:30": null
+ },
+ "Sun": {
+  "09:00-10:30": {
+   "taskId": 2,
+   "title": "Philosophy Reading: Kant, Ch. 4-6",
+   "course": "Philosophy",
+   "difficulty": "Medium",
+   "priority": "Medium",
+   "part": 2,
+   "parts": 2,
+   "status": "Proposed",
+   "explanation": "Placed here because estimated 82% completion chance here (no data yet - prior only); deadline in 1 day (2026-06-29); session 2 of 2 - spaced over the week for better retention.",
+   "scoreBreakdown": {
+    "p_complete": 0.82,
+    "observations": 0,
+    "days_to_deadline": 1
+   },
+   "day": "Sun",
+   "slot": "09:00-10:30"
+  },
+  "10:30-12:00": {
+   "taskId": 3,
+   "title": "German Vocabulary Practice",
+   "course": "German",
+   "difficulty": "Easy",
+   "priority": "Low",
+   "part": 2,
+   "parts": 2,
+   "status": "Proposed",
+   "explanation": "Placed here because estimated 82% completion chance here (no data yet - prior only); deadline in 3 days (2026-07-01); session 2 of 2 - spaced over the week for better retention.",
+   "scoreBreakdown": {
+    "p_complete": 0.82,
+    "observations": 0,
+    "days_to_deadline": 3
+   },
+   "day": "Sun",
+   "slot": "10:30-12:00"
+  },
+  "14:00-15:30": null,
+  "16:00-17:30": null,
+  "19:00-20:30": null
+ }
+}

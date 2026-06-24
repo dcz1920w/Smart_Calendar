@@ -1,0 +1,42 @@
+[
+ {
+  "id": 1,
+  "title": "Data Modeling Exam Review",
+  "course": "Data Modeling",
+  "deadline": "2026-06-27",
+  "estimatedHours": 4.5,
+  "difficulty": "Hard",
+  "priority": "High",
+  "status": "Not started"
+ },
+ {
+  "id": 2,
+  "title": "Philosophy Reading: Kant, Ch. 4-6",
+  "course": "Philosophy",
+  "deadline": "2026-06-29",
+  "estimatedHours": 3.0,
+  "difficulty": "Medium",
+  "priority": "Medium",
+  "status": "Not started"
+ },
+ {
+  "id": 3,
+  "title": "German Vocabulary Practice",
+  "course": "German",
+  "deadline": "2026-07-01",
+  "estimatedHours": 2.0,
+  "difficulty": "Easy",
+  "priority": "Low",
+  "status": "Not started"
+ },
+ {
+  "id": 4,
+  "title": "IUI Milestone Presentation",
+  "course": "Intelligent User Interfaces",
+  "deadline": "2026-06-26",
+  "estimatedHours": 3.0,
+  "difficulty": "Hard",
+  "priority": "High",
+  "status": "Not started"
+ }
+]
