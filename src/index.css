@@ -239,9 +239,82 @@
     background-color: #e0f2fe !important;
   }
 
-  .study-calendar .proposal-new,
+  .proposal-tag {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 0.12rem 0.45rem;
+    font-size: 0.56rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    line-height: 1;
+    text-transform: uppercase;
+    color: #0f172a;
+  }
+
+  .proposal-tag-new {
+    background: #86efac;
+  }
+
+  .proposal-tag-moved {
+    background: #fcd34d;
+  }
+
+  .proposal-tag-resized {
+    background: #c4b5fd;
+  }
+
+  .proposal-tag-protected {
+    background: #bae6fd;
+  }
+
+  .study-calendar .proposal-new {
+    box-shadow: inset 0 0 0 2px #22c55e, 0 14px 28px -22px rgba(15, 23, 42, 0.7);
+  }
+
+  .study-calendar .proposal-moved,
   .study-calendar .proposal-changed {
     box-shadow: inset 0 0 0 2px #f59e0b, 0 14px 28px -22px rgba(15, 23, 42, 0.7);
+  }
+
+  .study-calendar .proposal-resized {
+    box-shadow: inset 0 0 0 2px #8b5cf6, 0 14px 28px -22px rgba(15, 23, 42, 0.7);
+  }
+
+  .study-calendar .proposal-protected {
+    box-shadow: inset 0 0 0 2px #38bdf8, 0 14px 28px -22px rgba(15, 23, 42, 0.7);
+  }
+
+  .proposal-change-group {
+    border-radius: 1rem;
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    padding: 0.85rem;
+  }
+
+  .proposal-change-new {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+  }
+
+  .proposal-change-moved {
+    border-color: #fde68a;
+    background: #fffbeb;
+  }
+
+  .proposal-change-resized {
+    border-color: #ddd6fe;
+    background: #f5f3ff;
+  }
+
+  .proposal-change-removed {
+    border-color: #fecdd3;
+    background: #fff1f2;
+  }
+
+  .proposal-change-protected {
+    border-color: #bae6fd;
+    background: #f0f9ff;
   }
 
   .study-calendar .is-locked {
@@ -260,7 +333,9 @@
   }
 
   .study-calendar .fc-highlight {
-    background: rgba(6, 182, 212, 0.16);
+    background: rgba(14, 165, 233, 0.26) !important;
+    box-shadow: inset 0 0 0 1px rgba(2, 132, 199, 0.45);
+    pointer-events: none;
   }
 
   @media (max-width: 720px) {

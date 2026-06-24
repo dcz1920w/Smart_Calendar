@@ -446,36 +446,104 @@ function generateLocalProposal(tasks, committedSchedule = null) {
 
 function classifyProposal(committed, proposal) {
   const map = {};
-  let added = 0;
-  let changed = 0;
-  let removed = 0;
-  let unchanged = 0;
-  days.forEach((d) => {
-    const slots = new Set([
-      ...Object.keys(committed?.[d] ?? {}),
-      ...Object.keys(proposal?.[d] ?? {}),
-    ]);
-    slots.forEach((s) => {
-      const c = committed?.[d]?.[s] || null;
-      const p = proposal?.[d]?.[s] || null;
-      const key = `${d}|${s}`;
-      if (p && !c) {
-        map[key] = "new";
-        added++;
-      } else if (p && c) {
-        if (c.taskId === p.taskId && c.part === p.part) {
-          map[key] = "same";
-          unchanged++;
-        } else {
-          map[key] = "changed";
-          changed++;
-        }
-      } else if (!p && c) {
-        removed++;
-      }
-    });
+  const added = [];
+  const moved = [];
+  const resized = [];
+  const removed = [];
+  const unchanged = [];
+  const protectedBlocks = [];
+  const committedByKey = new Map();
+  const proposalByKey = new Map();
+
+  iterateSchedule(committed, (day, slot, block) => {
+    committedByKey.set(blockIdentity(block), { day, slot, block });
   });
-  return { map, added, changed, removed, unchanged };
+
+  iterateSchedule(proposal, (day, slot, block) => {
+    proposalByKey.set(blockIdentity(block), { day, slot, block });
+  });
+
+  proposalByKey.forEach((proposed, key) => {
+    const current = committedByKey.get(key);
+    const display = changeDisplay(proposed.block, proposed.day, proposed.slot);
+    const proposedMapKey = `${proposed.day}|${proposed.slot}`;
+
+    if (!current) {
+      map[proposedMapKey] = "new";
+      added.push(display);
+      return;
+    }
+
+    if (isReservedForProposal(proposed.block)) {
+      map[proposedMapKey] = "protected";
+      protectedBlocks.push({
+        ...display,
+        fromDay: current.day,
+        fromSlot: current.slot,
+      });
+      return;
+    }
+
+    if (current.day !== proposed.day) {
+      map[proposedMapKey] = "moved";
+      moved.push({
+        ...display,
+        fromDay: current.day,
+        fromSlot: current.slot,
+      });
+      return;
+    }
+
+    if (current.slot !== proposed.slot) {
+      const sameStart = current.slot.split("-")[0] === proposed.slot.split("-")[0];
+      map[proposedMapKey] = sameStart ? "resized" : "moved";
+      const entry = {
+        ...display,
+        fromDay: current.day,
+        fromSlot: current.slot,
+      };
+      if (sameStart) resized.push(entry);
+      else moved.push(entry);
+      return;
+    }
+
+    map[proposedMapKey] = "same";
+    unchanged.push(display);
+  });
+
+  committedByKey.forEach((current, key) => {
+    if (proposalByKey.has(key)) return;
+    removed.push(changeDisplay(current.block, current.day, current.slot));
+  });
+
+  return {
+    map,
+    added,
+    moved,
+    resized,
+    removed,
+    unchanged,
+    protectedBlocks,
+    changed: moved.length + resized.length,
+  };
+}
+
+function blockIdentity(block) {
+  const taskId = block?.taskId ?? "taskless";
+  const part = block?.part ?? 1;
+  const title = block?.title ?? "Untitled";
+  const course = block?.course ?? "General";
+  return `${taskId}|${part}|${course}|${title}`;
+}
+
+function changeDisplay(block, day, slot) {
+  return {
+    id: `${blockIdentity(block)}|${day}|${slot}`,
+    title: block?.title ?? "Untitled",
+    course: block?.course ?? "General",
+    day,
+    slot,
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -667,6 +735,10 @@ export default function App() {
     putCommitted(next).catch(() => {});
   }
 
+  function refreshCalendarView() {
+    setCalendarRefreshKey((value) => value + 1);
+  }
+
   function handleAddTask(event) {
     event.preventDefault();
     if (!form.title || !form.course || !form.deadline) {
@@ -784,6 +856,7 @@ export default function App() {
         "You moved this block yourself - the assistant keeps your choice (you stay in control).",
     };
     persistCommitted(updated);
+    refreshCalendarView();
     setRecommendation("Moved. Your change is saved to your calendar.");
     return true;
   }
@@ -791,11 +864,12 @@ export default function App() {
   function startScheduleAdd(day, slot) {
     if (!day || !slot) return;
     setScheduleDraft({ day, slot });
+    refreshCalendarView();
   }
 
   function closeScheduleDraft() {
     setScheduleDraft(null);
-    setCalendarRefreshKey((value) => value + 1);
+    refreshCalendarView();
   }
 
   function addScheduleBlock({ day, slot, title, course }) {
@@ -824,6 +898,7 @@ export default function App() {
     };
     persistCommitted(updated);
     setScheduleDraft(null);
+    refreshCalendarView();
     setRecommendation("Schedule added and protected from future proposals.");
     return true;
   }
@@ -839,6 +914,7 @@ export default function App() {
     delete updated[day][slot].lockReason;
     persistCommitted(updated);
     setSelectedBlock(null);
+    refreshCalendarView();
     setRecommendation("Schedule unlocked for future proposals. You can still drag or stretch it anytime.");
   }
 
@@ -853,6 +929,7 @@ export default function App() {
     };
     persistCommitted(updated);
     setSelectedBlock(null);
+    refreshCalendarView();
     setRecommendation("Schedule locked against future proposals. You can still drag or stretch it.");
   }
 
@@ -861,6 +938,7 @@ export default function App() {
     const updated = normalizeSchedule(structuredClone(committed));
     if (updated[day]?.[slot]) updated[day][slot].status = status;
     persistCommitted(updated);
+    refreshCalendarView();
 
     if (status === "Completed" || status === "Skipped") {
       try {
@@ -1569,11 +1647,74 @@ function AskBox({ planQA, onAsk, llmAvailable }) {
 /* ------------------------------------------------------------------ */
 
 function ProposedTag({ kind }) {
-  if (kind !== "new" && kind !== "changed") return null;
+  const labels = {
+    new: "new",
+    moved: "moved",
+    resized: "resized",
+    protected: "protected",
+  };
+  if (!labels[kind]) return null;
   return (
-    <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-950">
-      {kind === "new" ? "new" : "moved"}
+    <span className={`proposal-tag proposal-tag-${kind}`}>
+      {labels[kind]}
     </span>
+  );
+}
+
+function ProposalChangesPanel({ diff }) {
+  if (!diff) return null;
+  const groups = [
+    ["New", diff.added, "proposal-change-new"],
+    ["Moved", diff.moved, "proposal-change-moved"],
+    ["Resized", diff.resized, "proposal-change-resized"],
+    ["Removed", diff.removed, "proposal-change-removed"],
+    ["Protected", diff.protectedBlocks, "proposal-change-protected"],
+  ].filter(([, items]) => items.length > 0);
+
+  if (groups.length === 0) {
+    return (
+      <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-900">
+        No calendar changes in this proposal.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 rounded-2xl border border-slate-200 bg-white/85 p-4">
+      <div className="mb-3 text-sm font-bold text-slate-900">Schedule changes</div>
+      <div className="grid gap-3 lg:grid-cols-2">
+        {groups.map(([label, items, className]) => (
+          <div key={label} className={`proposal-change-group ${className}`}>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-xs font-bold uppercase tracking-[0.14em] text-slate-600">
+                {label}
+              </span>
+              <span className="rounded-full bg-white px-2 py-0.5 text-xs font-bold text-slate-700 ring-1 ring-slate-200">
+                {items.length}
+              </span>
+            </div>
+            <div className="space-y-2">
+              {items.slice(0, 4).map((item) => (
+                <div key={item.id} className="text-sm leading-5 text-slate-800">
+                  <span className="font-semibold">{item.title}</span>
+                  <span className="text-slate-500"> · {item.course}</span>
+                  <div className="text-xs font-semibold text-slate-500">
+                    {item.fromDay
+                      ? `${item.fromDay} ${item.fromSlot} -> ${item.day} ${item.slot}`
+                      : `${item.day} ${item.slot}`}
+                  </div>
+                </div>
+              ))}
+              {items.length > 4 && (
+                <div className="text-xs font-semibold text-slate-500">
+                  +{items.length - 4} more
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -1601,6 +1742,8 @@ function CalendarPage({
   const weekStart = useMemo(() => startOfCurrentWeek(), []);
   const initialDate = useMemo(() => toLocalDateString(weekStart), [weekStart]);
   const calendarRef = useRef(null);
+  const clickTimerRef = useRef(null);
+  const lastDateClickRef = useRef(null);
   const calendarEvents = useMemo(() => {
     const events = [];
     iterateSchedule(schedule, (day, slot, block) => {
@@ -1645,12 +1788,17 @@ function CalendarPage({
   useEffect(() => {
     const api = calendarRef.current?.getApi();
     if (!api) return undefined;
-    const id = window.requestAnimationFrame(() => {
-      api.unselect();
-      api.updateSize();
-    });
+    const id = window.requestAnimationFrame(() => api.updateSize());
     return () => window.cancelAnimationFrame(id);
   }, [calendarRefreshKey, calendarExpanded]);
+
+  function refreshFullCalendar() {
+    const api = calendarRef.current?.getApi();
+    if (!api) return;
+    window.requestAnimationFrame(() => {
+      api.updateSize();
+    });
+  }
 
   function handleCalendarChange(info) {
     const { day: sourceDay, slot: sourceSlot } = info.event.extendedProps;
@@ -1662,21 +1810,63 @@ function CalendarPage({
     const targetSlot = slotFromDates(info.event.start, info.event.end);
     const moved = moveBlockToSlot(sourceDay, sourceSlot, targetDay, targetSlot);
     if (!moved) info.revert();
+    refreshFullCalendar();
   }
 
-  function handleSelect(selection) {
-    const day = dayFromDate(selection.start, weekStart);
+  useEffect(() => {
+    return () => {
+      if (clickTimerRef.current) {
+        window.clearTimeout(clickTimerRef.current);
+      }
+    };
+  }, []);
+
+  function selectCalendarSlot(start) {
+    const end = new Date(start);
+    end.setMinutes(end.getMinutes() + 90);
+    const api = calendarRef.current?.getApi();
+    api?.select(start, end);
+    api?.updateSize();
+    return end;
+  }
+
+  function requestScheduleAddFromDate(date) {
+    const end = new Date(date);
+    end.setMinutes(end.getMinutes() + 90);
+    const day = dayFromDate(date, weekStart);
     if (!day) return;
-    selection.view.calendar.unselect();
-    onRequestScheduleAdd(day, slotFromDates(selection.start, selection.end));
+    const api = calendarRef.current?.getApi();
+    api?.unselect();
+    api?.updateSize();
+    onRequestScheduleAdd(day, slotFromDates(date, end));
+    refreshFullCalendar();
   }
 
   function handleDateClick(info) {
-    const end = new Date(info.date);
-    end.setMinutes(end.getMinutes() + 90);
-    const day = dayFromDate(info.date, weekStart);
-    if (!day) return;
-    onRequestScheduleAdd(day, slotFromDates(info.date, end));
+    const clickedAt = info.date.getTime();
+    const now = Date.now();
+    const last = lastDateClickRef.current;
+    const isDoubleClick =
+      last && last.clickedAt === clickedAt && now - last.time < 350;
+
+    if (clickTimerRef.current) {
+      window.clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+
+    if (isDoubleClick) {
+      lastDateClickRef.current = null;
+      requestScheduleAddFromDate(info.date);
+      return;
+    }
+
+    selectCalendarSlot(info.date);
+    refreshFullCalendar();
+    lastDateClickRef.current = { clickedAt, time: now };
+    clickTimerRef.current = window.setTimeout(() => {
+      lastDateClickRef.current = null;
+      clickTimerRef.current = null;
+    }, 350);
   }
 
   function renderEventContent(info) {
@@ -1773,16 +1963,21 @@ function CalendarPage({
               <p className="text-sm leading-6 text-amber-950 max-w-3xl">{proposal.summary}</p>
               <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-amber-900">
                 <span className="rounded-full bg-white/70 px-2 py-0.5 ring-1 ring-amber-200">
-                  {diff.added} new
+                  {diff.added.length} new
                 </span>
                 {diff.changed > 0 && (
                   <span className="rounded-full bg-white/70 px-2 py-0.5 ring-1 ring-amber-200">
-                    {diff.changed} moved
+                    {diff.changed} changed
                   </span>
                 )}
-                {diff.removed > 0 && (
+                {diff.removed.length > 0 && (
                   <span className="rounded-full bg-white/70 px-2 py-0.5 ring-1 ring-amber-200">
-                    {diff.removed} removed
+                    {diff.removed.length} removed
+                  </span>
+                )}
+                {diff.protectedBlocks.length > 0 && (
+                  <span className="rounded-full bg-sky-100 px-2 py-0.5 text-sky-800 ring-1 ring-sky-200">
+                    {diff.protectedBlocks.length} protected
                   </span>
                 )}
                 {proposal.unplaced > 0 && (
@@ -1807,6 +2002,7 @@ function CalendarPage({
               </button>
             </div>
           </div>
+          <ProposalChangesPanel diff={diff} />
         </div>
       )}
 
@@ -1845,10 +2041,12 @@ function CalendarPage({
             height={calendarExpanded ? "auto" : 760}
             events={calendarEvents}
             eventContent={renderEventContent}
-            eventClick={(info) => onOpenBlock(info.event.extendedProps.block)}
+            eventClick={(info) => {
+              onOpenBlock(info.event.extendedProps.block);
+              refreshFullCalendar();
+            }}
             eventDrop={handleCalendarChange}
             eventResize={handleCalendarChange}
-            select={handleSelect}
             dateClick={handleDateClick}
           />
         </div>
