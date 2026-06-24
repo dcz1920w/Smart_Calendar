@@ -38,5 +38,15 @@
   "difficulty": "Hard",
   "priority": "High",
   "status": "Not started"
+ },
+ {
+  "id": 1782326542484,
+  "title": "ME Essay",
+  "course": "ME",
+  "deadline": "2026-06-30",
+  "estimatedHours": 1.5,
+  "difficulty": "Medium",
+  "priority": "Medium",
+  "status": "Not started"
  }
 ]
