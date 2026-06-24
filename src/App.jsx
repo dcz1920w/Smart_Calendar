@@ -136,10 +136,23 @@ function normalizeReservedBlock(block, day, slot) {
   return next;
 }
 
-function lockedScheduleFrom(schedule) {
+function taskMapFrom(tasks = []) {
+  return new Map(tasks.map((task) => [String(task.id), task]));
+}
+
+function reservedBlockFitsProposalWindow(block, day, slot, tasksById = new Map()) {
+  if (isManualBlock(block)) return true;
+  const task = tasksById.get(String(block?.taskId ?? ""));
+  if (!task) return false;
+  return generatedBlockFitsWindow({ ...block, deadline: block.deadline ?? task.deadline }, day, slot);
+}
+
+function lockedScheduleFrom(schedule, tasks = []) {
+  const tasksById = taskMapFrom(tasks);
   const locked = normalizeSchedule(null);
   iterateSchedule(schedule, (day, slot, block) => {
     if (!isReservedForProposal(block)) return;
+    if (!reservedBlockFitsProposalWindow(block, day, slot, tasksById)) return;
     locked[day][slot] = normalizeReservedBlock(block, day, slot);
   });
   return locked;
@@ -155,25 +168,37 @@ function hasLockedConflict(schedule, day, slot, ignoredSlot = null) {
   );
 }
 
-function mergeLockedSchedules(schedule, committed) {
+function mergeLockedSchedules(schedule, committed, tasks = []) {
+  const tasksById = taskMapFrom(tasks);
   const next = normalizeSchedule(schedule);
   iterateSchedule(committed, (day, slot, block) => {
     if (!isReservedForProposal(block)) return;
+    if (!reservedBlockFitsProposalWindow(block, day, slot, tasksById)) return;
     next[day][slot] = normalizeReservedBlock(block, day, slot);
   });
-  const reserved = lockedScheduleFrom(committed);
+  const reserved = lockedScheduleFrom(committed, tasks);
   iterateSchedule(next, (day, slot, block) => {
-    if (isReservedForProposal(block)) return;
+    if (isReservedForProposal(block)) {
+      if (reservedBlockFitsProposalWindow(block, day, slot, tasksById)) return;
+      delete next[day][slot];
+      return;
+    }
+    if (!reservedBlockFitsProposalWindow(block, day, slot, tasksById)) {
+      delete next[day][slot];
+      return;
+    }
     if (!hasLockedConflict(reserved, day, slot)) return;
     delete next[day][slot];
   });
   return next;
 }
 
-function lockedTaskPartsFrom(schedule) {
+function lockedTaskPartsFrom(schedule, tasks = []) {
+  const tasksById = taskMapFrom(tasks);
   const locked = {};
-  iterateSchedule(schedule, (_day, _slot, block) => {
+  iterateSchedule(schedule, (day, slot, block) => {
     if (!isStableLocked(block) || isManualBlock(block) || block.taskId == null) return;
+    if (!reservedBlockFitsProposalWindow(block, day, slot, tasksById)) return;
     const part = Number(block.part ?? 1);
     if (!Number.isFinite(part)) return;
     const taskId = String(block.taskId);
@@ -394,13 +419,13 @@ function generateLocalProposal(tasks, committedSchedule = null) {
     .filter((task) => task.status !== "Completed")
     .sort((a, b) => getPriorityScore(b) - getPriorityScore(a));
 
-  const lockedParts = lockedTaskPartsFrom(committedSchedule);
+  const lockedParts = lockedTaskPartsFrom(committedSchedule, tasks);
   const blocks = sortedTasks.flatMap((task) =>
     splitTaskIntoBlocks(task).filter(
       (block) => !(lockedParts[String(block.taskId)] ?? new Set()).has(block.part)
     )
   );
-  const schedule = lockedScheduleFrom(committedSchedule);
+  const schedule = lockedScheduleFrom(committedSchedule, tasks);
   days.forEach((day) => {
     schedule[day] = schedule[day] ?? {};
     timeSlots.forEach((slot) => {
@@ -782,7 +807,7 @@ export default function App() {
     setPlanQA(null);
     try {
       const data = await proposePlan(tasks, prefs, committed);
-      const grid = mergeLockedSchedules(data.proposal, committed);
+      const grid = mergeLockedSchedules(data.proposal, committed, tasks);
       days.forEach((day) => {
         Object.entries(grid[day]).forEach(([slot, block]) => {
           grid[day][slot] = block ? { ...block, day, slot } : null;

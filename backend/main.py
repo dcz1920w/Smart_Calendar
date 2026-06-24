@@ -10,13 +10,24 @@ Run:  uvicorn main:app --reload --port 8000   (from the backend/ folder)
 
 import json
 import os
+from datetime import datetime
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 import llm
-from engine import DAYS, SLOTS, FocusModel, ScheduleOptimizer, _is_reserved_block, _reserved_block
+from engine import (
+    DAYS,
+    SLOTS,
+    FocusModel,
+    ScheduleOptimizer,
+    _deadline_end,
+    _is_manual_block,
+    _is_reserved_block,
+    _reserved_block,
+    _slot_datetimes,
+)
 
 app = FastAPI(title="Smart Study Calendar API", version="0.5.0")
 app.add_middleware(
@@ -89,11 +100,33 @@ class ExplainRequest(BaseModel):
 
 
 # ---------- helpers ----------
-def _locked_schedule(grid: dict | None) -> dict:
+def _generated_block_fits_window(block: dict, day: str, slot: str, tasks_by_id: dict[str, dict]) -> bool:
+    if _is_manual_block(block):
+        return True
+
+    task = tasks_by_id.get(str(block.get("taskId")))
+    if not task:
+        return False
+
+    slot_start, slot_end = _slot_datetimes(day, slot, ScheduleOptimizer._monday(None))
+    if slot_start < datetime.now():
+        return False
+
+    deadline_end = _deadline_end(block.get("deadline") or task.get("deadline"))
+    if deadline_end and slot_end > deadline_end:
+        return False
+
+    return True
+
+
+def _locked_schedule(grid: dict | None, tasks: list[dict] | None = None) -> dict:
+    tasks_by_id = {str(task.get("id")): task for task in (tasks or [])}
     locked = {d: {} for d in DAYS}
     for d in DAYS:
         for s, b in (grid or {}).get(d, {}).items():
             if not _is_reserved_block(b):
+                continue
+            if not _generated_block_fits_window(b, d, s, tasks_by_id):
                 continue
             locked[d][s] = _reserved_block(b, d, s)
     return locked
@@ -131,10 +164,11 @@ def health():
 def propose(req: ProposeRequest):
     """Compute a PROPOSED plan. Does not persist - the user must approve it."""
     prefs = req.preferences.model_dump()
-    locked = _locked_schedule(req.committedSchedule)
+    task_payload = [t.model_dump() for t in req.tasks]
+    locked = _locked_schedule(req.committedSchedule, task_payload)
     prefs["lockedSchedule"] = locked
     opt = ScheduleOptimizer(model, prefs)
-    assignment, unplaced, score = opt.solve([t.model_dump() for t in req.tasks])
+    assignment, unplaced, score = opt.solve(task_payload)
 
     grid = {d: {s: None for s in SLOTS} for d in DAYS}
     for d in DAYS:
@@ -149,6 +183,7 @@ def propose(req: ProposeRequest):
         grid[d][s] = {
             "taskId": b.task_id, "title": b.title, "course": b.course,
             "difficulty": b.difficulty, "priority": b.priority,
+            "deadline": b.deadline,
             "part": b.part, "parts": b.parts, "status": "Proposed",
             "explanation": b.explanation, "scoreBreakdown": b.score_breakdown,
         }
