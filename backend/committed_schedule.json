@@ -1,6 +1,25 @@
 {
  "Mon": {
-  "09:00-10:30": null,
+  "09:00-10:30": {
+   "taskId": 1,
+   "title": "Data Modeling Exam Review",
+   "course": "Data Modeling",
+   "difficulty": "Hard",
+   "priority": "High",
+   "part": 1,
+   "parts": 3,
+   "status": "Completed",
+   "explanation": "You moved this block yourself - the assistant keeps your choice (you stay in control).",
+   "scoreBreakdown": {
+    "p_complete": 0.91,
+    "observations": 4,
+    "days_to_deadline": 2
+   },
+   "day": "Mon",
+   "slot": "09:00-10:30",
+   "stableLocked": true,
+   "lockReason": "user_moved"
+  },
   "10:30-12:00": null,
   "14:00-15:30": null,
   "16:00-17:30": null,
@@ -11,35 +30,35 @@
   "10:30-12:00": null,
   "14:00-15:30": null,
   "16:00-17:30": null,
-  "19:00-20:30": null
+  "19:00-20:30": null,
+  "10:15-11:45": {
+   "taskId": 1,
+   "title": "Data Modeling Exam Review",
+   "course": "Data Modeling",
+   "difficulty": "Hard",
+   "priority": "High",
+   "part": 2,
+   "parts": 3,
+   "status": "Proposed",
+   "explanation": "You moved this block yourself - the assistant keeps your choice (you stay in control).",
+   "scoreBreakdown": {
+    "p_complete": 0.92,
+    "observations": 4,
+    "days_to_deadline": 2
+   },
+   "day": "Tue",
+   "slot": "10:15-11:45",
+   "stableLocked": true,
+   "lockReason": "user_moved"
+  }
  },
  "Wed": {
   "09:00-10:30": null,
   "10:30-12:00": null,
   "14:00-15:30": null,
   "16:00-17:30": null,
-  "19:00-20:30": null
- },
- "Thu": {
-  "09:00-10:30": {
-   "taskId": 1,
-   "title": "Data Modeling Exam Review",
-   "course": "Data Modeling",
-   "difficulty": "Hard",
-   "priority": "High",
-   "part": 1,
-   "parts": 3,
-   "status": "Proposed",
-   "explanation": "Placed here because you complete 91% of blocks here (based on 4 past observations); hard task placed in your preferred morning focus window; deadline in 2 days (2026-06-27); session 1 of 3 - spaced over the week for better retention.",
-   "scoreBreakdown": {
-    "p_complete": 0.91,
-    "observations": 4,
-    "days_to_deadline": 2
-   },
-   "day": "Thu",
-   "slot": "09:00-10:30"
-  },
-  "10:30-12:00": {
+  "19:00-20:30": null,
+  "11:00-12:30": {
    "taskId": 4,
    "title": "IUI Milestone Presentation",
    "course": "Intelligent User Interfaces",
@@ -47,80 +66,19 @@
    "priority": "High",
    "part": 1,
    "parts": 2,
-   "status": "Proposed",
-   "explanation": "Placed here because estimated 82% completion chance here (no data yet - prior only); hard task placed in your preferred morning focus window; deadline in 1 day (2026-06-26); session 1 of 2 - spaced over the week for better retention.",
+   "status": "Completed",
+   "explanation": "You moved this block yourself - the assistant keeps your choice (you stay in control).",
    "scoreBreakdown": {
     "p_complete": 0.82,
     "observations": 0,
     "days_to_deadline": 1
    },
-   "day": "Thu",
-   "slot": "10:30-12:00"
+   "day": "Wed",
+   "slot": "11:00-12:30",
+   "stableLocked": true,
+   "lockReason": "user_moved"
   },
-  "14:00-15:30": {
-   "taskId": 3,
-   "title": "German Vocabulary Practice",
-   "course": "German",
-   "difficulty": "Easy",
-   "priority": "Low",
-   "part": 1,
-   "parts": 2,
-   "status": "Proposed",
-   "explanation": "Placed here because you complete 61% of blocks here (based on 3 past observations); session 1 of 2 - spaced over the week for better retention.",
-   "scoreBreakdown": {
-    "p_complete": 0.61,
-    "observations": 3,
-    "days_to_deadline": 6
-   },
-   "day": "Thu",
-   "slot": "14:00-15:30"
-  },
-  "16:00-17:30": null,
-  "19:00-20:30": null
- },
- "Fri": {
-  "09:00-10:30": {
-   "taskId": 1,
-   "title": "Data Modeling Exam Review",
-   "course": "Data Modeling",
-   "difficulty": "Hard",
-   "priority": "High",
-   "part": 2,
-   "parts": 3,
-   "status": "Proposed",
-   "explanation": "Placed here because estimated 82% completion chance here (no data yet - prior only); hard task placed in your preferred morning focus window; deadline in 1 day (2026-06-27); session 2 of 3 - spaced over the week for better retention.",
-   "scoreBreakdown": {
-    "p_complete": 0.82,
-    "observations": 0,
-    "days_to_deadline": 1
-   },
-   "day": "Fri",
-   "slot": "09:00-10:30"
-  },
-  "10:30-12:00": {
-   "taskId": 4,
-   "title": "IUI Milestone Presentation",
-   "course": "Intelligent User Interfaces",
-   "difficulty": "Hard",
-   "priority": "High",
-   "part": 2,
-   "parts": 2,
-   "status": "Proposed",
-   "explanation": "Placed here because estimated 82% completion chance here (no data yet - prior only); hard task placed in your preferred morning focus window; deadline in 0 days (2026-06-26); session 2 of 2 - spaced over the week for better retention.",
-   "scoreBreakdown": {
-    "p_complete": 0.82,
-    "observations": 0,
-    "days_to_deadline": 0
-   },
-   "day": "Fri",
-   "slot": "10:30-12:00"
-  },
-  "14:00-15:30": null,
-  "16:00-17:30": null,
-  "19:00-20:30": null
- },
- "Sat": {
-  "09:00-10:30": {
+  "07:45-09:00": {
    "taskId": 1,
    "title": "Data Modeling Exam Review",
    "course": "Data Modeling",
@@ -129,16 +87,25 @@
    "part": 3,
    "parts": 3,
    "status": "Proposed",
-   "explanation": "Placed here because estimated 82% completion chance here (no data yet - prior only); hard task placed in your preferred morning focus window; deadline in 0 days (2026-06-27); session 3 of 3 - spaced over the week for better retention.",
+   "explanation": "You moved this block yourself - the assistant keeps your choice (you stay in control).",
    "scoreBreakdown": {
-    "p_complete": 0.82,
-    "observations": 0,
-    "days_to_deadline": 0
+    "p_complete": 0.87,
+    "observations": 1,
+    "days_to_deadline": 1
    },
-   "day": "Sat",
-   "slot": "09:00-10:30"
-  },
-  "10:30-12:00": {
+   "day": "Wed",
+   "slot": "07:45-09:00",
+   "stableLocked": true,
+   "lockReason": "user_moved"
+  }
+ },
+ "Thu": {
+  "09:00-10:30": null,
+  "10:30-12:00": null,
+  "14:00-15:30": null,
+  "16:00-17:30": null,
+  "19:00-20:30": null,
+  "09:45-11:15": {
    "taskId": 2,
    "title": "Philosophy Reading: Kant, Ch. 4-6",
    "course": "Philosophy",
@@ -147,21 +114,44 @@
    "part": 1,
    "parts": 2,
    "status": "Proposed",
-   "explanation": "Placed here because estimated 82% completion chance here (no data yet - prior only); deadline in 2 days (2026-06-29); session 1 of 2 - spaced over the week for better retention.",
+   "explanation": "You moved this block yourself - the assistant keeps your choice (you stay in control).",
    "scoreBreakdown": {
-    "p_complete": 0.82,
-    "observations": 0,
-    "days_to_deadline": 2
+    "p_complete": 0.92,
+    "observations": 4,
+    "days_to_deadline": 4
    },
-   "day": "Sat",
-   "slot": "10:30-12:00"
+   "day": "Thu",
+   "slot": "09:45-11:15",
+   "stableLocked": true,
+   "lockReason": "user_moved"
+  }
+ },
+ "Fri": {
+  "09:00-10:30": null,
+  "10:30-12:00": {
+   "taskId": 4,
+   "title": "IUI Milestone Presentation",
+   "course": "Intelligent User Interfaces",
+   "difficulty": "Hard",
+   "priority": "High",
+   "part": 2,
+   "parts": 2,
+   "status": "Proposed",
+   "explanation": "You moved this block yourself - the assistant keeps your choice (you stay in control).",
+   "scoreBreakdown": {
+    "p_complete": 0.84,
+    "observations": 0,
+    "days_to_deadline": 1
+   },
+   "day": "Fri",
+   "slot": "10:30-12:00",
+   "stableLocked": true,
+   "lockReason": "user_moved"
   },
   "14:00-15:30": null,
   "16:00-17:30": null,
-  "19:00-20:30": null
- },
- "Sun": {
-  "09:00-10:30": {
+  "19:00-20:30": null,
+  "08:00-09:30": {
    "taskId": 2,
    "title": "Philosophy Reading: Kant, Ch. 4-6",
    "course": "Philosophy",
@@ -170,16 +160,42 @@
    "part": 2,
    "parts": 2,
    "status": "Proposed",
-   "explanation": "Placed here because estimated 82% completion chance here (no data yet - prior only); deadline in 1 day (2026-06-29); session 2 of 2 - spaced over the week for better retention.",
+   "explanation": "You moved this block yourself - the assistant keeps your choice (you stay in control).",
    "scoreBreakdown": {
-    "p_complete": 0.82,
-    "observations": 0,
-    "days_to_deadline": 1
+    "p_complete": 0.87,
+    "observations": 1,
+    "days_to_deadline": 3
    },
-   "day": "Sun",
-   "slot": "09:00-10:30"
-  },
+   "day": "Fri",
+   "slot": "08:00-09:30",
+   "stableLocked": true,
+   "lockReason": "user_moved"
+  }
+ },
+ "Sat": {
+  "09:00-10:30": null,
   "10:30-12:00": {
+   "taskId": 1782326542484,
+   "title": "ME Essay",
+   "course": "ME",
+   "difficulty": "Medium",
+   "priority": "Medium",
+   "part": 1,
+   "parts": 1,
+   "status": "Proposed",
+   "explanation": "Placed here because you complete 87% of blocks here (based on 1 past observations); deadline in 3 days (2026-06-30).",
+   "scoreBreakdown": {
+    "p_complete": 0.87,
+    "observations": 1,
+    "days_to_deadline": 3
+   },
+   "day": "Sat",
+   "slot": "10:30-12:00"
+  },
+  "14:00-15:30": null,
+  "16:00-17:30": null,
+  "19:00-20:30": null,
+  "08:45-10:15": {
    "taskId": 3,
    "title": "German Vocabulary Practice",
    "course": "German",
@@ -188,15 +204,38 @@
    "part": 2,
    "parts": 2,
    "status": "Proposed",
-   "explanation": "Placed here because estimated 82% completion chance here (no data yet - prior only); deadline in 3 days (2026-07-01); session 2 of 2 - spaced over the week for better retention.",
+   "explanation": "You moved this block yourself - the assistant keeps your choice (you stay in control).",
    "scoreBreakdown": {
-    "p_complete": 0.82,
+    "p_complete": 0.87,
+    "observations": 1,
+    "days_to_deadline": 4
+   },
+   "day": "Sat",
+   "slot": "08:45-10:15",
+   "stableLocked": true,
+   "lockReason": "user_moved"
+  }
+ },
+ "Sun": {
+  "09:00-10:30": {
+   "taskId": 3,
+   "title": "German Vocabulary Practice",
+   "course": "German",
+   "difficulty": "Easy",
+   "priority": "Low",
+   "part": 1,
+   "parts": 2,
+   "status": "Proposed",
+   "explanation": "Placed here because estimated 84% completion chance here (no data yet - prior only); deadline in 3 days (2026-07-01); session 1 of 2 - spaced over the week for better retention.",
+   "scoreBreakdown": {
+    "p_complete": 0.84,
     "observations": 0,
     "days_to_deadline": 3
    },
    "day": "Sun",
-   "slot": "10:30-12:00"
+   "slot": "09:00-10:30"
   },
+  "10:30-12:00": null,
   "14:00-15:30": null,
   "16:00-17:30": null,
   "19:00-20:30": null

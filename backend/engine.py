@@ -296,8 +296,8 @@ def _reserved_block(block: dict, day: str, slot: str) -> dict:
     return next_block
 
 
-def _split(task: dict) -> list[Block]:
-    n = max(1, math.ceil(float(task.get("estimatedHours", BLOCK_HOURS)) / BLOCK_HOURS))
+def _split(task: dict, max_block_duration: float = BLOCK_HOURS) -> list[Block]:
+    n = max(1, math.ceil(float(task.get("estimatedHours", BLOCK_HOURS)) / max_block_duration))
     return [
         Block(
             task_id=task["id"], title=task["title"], course=task["course"],
@@ -315,6 +315,7 @@ class ScheduleOptimizer:
         prefs = prefs or {}
         self.focus_window = prefs.get("focusWindow", "morning")  # morning/afternoon/evening
         self.max_per_day = int(prefs.get("maxBlocksPerDay", 3))
+        self.max_block_duration = float(prefs.get("maxBlockDuration", 1.5))
         self.week_monday = self._monday(prefs.get("weekStart"))
         self.now = datetime.now()
         self.locked_slots = self._locked_slots(prefs.get("lockedSchedule"))
@@ -340,6 +341,12 @@ class ScheduleOptimizer:
         if not self._fits_time_window(block, day, slot):
             return -1e9
         if self._overlaps_locked(day, slot):
+            return -1e9
+        
+        # Hard constraint: block duration must not exceed maximum allowed duration
+        slot_start, slot_end = _slot_datetimes(day, slot, self.week_monday)
+        slot_duration = (slot_end - slot_start).total_seconds() / 3600  # in hours
+        if slot_duration > self.max_block_duration:
             return -1e9
 
         # 1. learned focus probability, weighted by difficulty
@@ -420,7 +427,7 @@ class ScheduleOptimizer:
             if t.get("status") == "Completed":
                 continue
             locked_parts = self.locked_task_parts.get(str(t.get("id")), set())
-            blocks.extend([b for b in _split(t) if b.part not in locked_parts])
+            blocks.extend([b for b in _split(t, self.max_block_duration) if b.part not in locked_parts])
 
         # most constrained / most urgent first
         def order_key(b: Block):

@@ -578,6 +578,7 @@ export default function App() {
   const [prefs, setPrefs] = useState({
     focusWindow: "morning",
     maxBlocksPerDay: 3,
+    maxBlockDuration: 1.5,
   });
 
   const [form, setForm] = useState({
@@ -1679,11 +1680,18 @@ function CalendarPage({
   }
 
   function renderEventContent(info) {
-    const { block, kind } = info.event.extendedProps;
+    const eventBlock = info.event.extendedProps?.block || {};
+    const kind = info.event.extendedProps?.kind;
+    const course = eventBlock.course || "Study";
+    const title = eventBlock.title || "Study block";
+    const status = eventBlock.status;
+    const parts = eventBlock.parts ?? 1;
+    const part = eventBlock.part ?? 1;
+
     if (info.view.type === "dayGridMonth") {
       return (
         <div className="fc-month-study-content">
-          <span className="fc-month-study-title">{block.title}</span>
+          <span className="fc-month-study-title">{title}</span>
           <ProposedTag kind={kind} />
         </div>
       );
@@ -1695,21 +1703,21 @@ function CalendarPage({
           <span>{info.timeText}</span>
           <ProposedTag kind={kind} />
         </div>
-        <div className="fc-study-course">{block.course}</div>
-        <div className="fc-study-title">{block.title}</div>
+        <div className="fc-study-course">{course}</div>
+        <div className="fc-study-title">{title}</div>
         <div className="fc-study-footer">
           <span>
-            {block.status === "Completed"
+            {status === "Completed"
               ? "Done"
-              : block.status === "Skipped"
+              : status === "Skipped"
               ? "Skipped"
-              : isStableLocked(block)
+              : isStableLocked(eventBlock)
               ? "Locked"
               : isProposal
               ? "Proposed"
               : "Click for details"}
           </span>
-          {block.parts > 1 && <span>{block.part}/{block.parts}</span>}
+          {parts > 1 && <span>{part}/{parts}</span>}
         </div>
       </div>
     );
@@ -2021,6 +2029,23 @@ function SettingsPage({ prefs, setPrefs, backendOnline, llmAvailable, onResetMod
             <span className="text-lg font-bold text-slate-900">{prefs.maxBlocksPerDay}</span>
           </div>
           <p className="text-xs text-slate-500 mt-3">The optimizer penalizes days that exceed this load.</p>
+        </div>
+
+        <div className="border border-slate-200 rounded-[1.75rem] p-5 bg-white shadow-sm">
+          <h4 className="font-semibold text-slate-950 mb-3">Maximum Study Block Duration</h4>
+          <div className="flex items-center gap-4">
+            <input
+              type="range"
+              min="0.5"
+              max="3"
+              step="0.5"
+              value={prefs.maxBlockDuration}
+              onChange={(e) => setPrefs({ ...prefs, maxBlockDuration: Number(e.target.value) })}
+              className="w-56 accent-cyan-600"
+            />
+            <span className="text-lg font-bold text-slate-900">{prefs.maxBlockDuration}h</span>
+          </div>
+          <p className="text-xs text-slate-500 mt-3">Tasks will be split into blocks not exceeding this duration.</p>
         </div>
 
         <div className="border border-slate-200 rounded-[1.75rem] p-5 bg-white shadow-sm">

@@ -59,6 +59,7 @@ class Task(BaseModel):
 class Preferences(BaseModel):
     focusWindow: str = "morning"
     maxBlocksPerDay: int = 3
+    maxBlockDuration: float = 1.5
     weekStart: str | None = None
 
 
