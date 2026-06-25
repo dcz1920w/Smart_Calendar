@@ -14,6 +14,7 @@ import {
   explainPlan,
   resetModel,
   sendFeedback,
+  undoFeedback,
 } from "./api";
 
 const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -390,9 +391,33 @@ function getPriorityScore(task) {
     Math.ceil((deadline - today) / (1000 * 60 * 60 * 24))
   );
   return (
+    difficultyScore[task.difficulty] * 4 +
     priorityScore[task.priority] * 2 +
-    difficultyScore[task.difficulty] +
     10 / daysLeft
+  );
+}
+
+function analyticsLookupFromHeatmap(heatmap) {
+  const lookup = {};
+  (heatmap ?? []).forEach((cell) => {
+    lookup[`${cell.day}|${cell.slot}`] = typeof cell.p === "number" ? cell.p : 0.5;
+  });
+  return lookup;
+}
+
+function localSlotScore(block, day, slot, analyticsLookup) {
+  const difficultyWeight = { Hard: 3.5, Medium: 2, Easy: 1 };
+  const priorityWeight = { High: 0.45, Medium: 0.25, Low: 0.1 };
+  const p = analyticsLookup[`${day}|${slot}`] ?? 0.5;
+  const deadline = deadlineEndDate(block.deadline);
+  const { start } = datesFromDaySlot(day, slot);
+  const daysLeft = deadline
+    ? Math.max(1, Math.ceil((deadline - start) / (24 * 60 * 60 * 1000)))
+    : 14;
+  return (
+    p * (difficultyWeight[block.difficulty] ?? 2) +
+    (priorityWeight[block.priority] ?? 0.25) +
+    0.8 / daysLeft
   );
 }
 
@@ -409,12 +434,13 @@ function splitTaskIntoBlocks(task) {
     parts: blockCount,
     status: "Proposed",
     explanation:
-      "Placed by the local fallback heuristic (Python engine offline): sorted by urgency, hard tasks preferred in the morning.",
+      "Placed by the local fallback heuristic (Python engine offline): harder tasks are matched to the strongest analytics slots.",
     scoreBreakdown: {},
   }));
 }
 
-function generateLocalProposal(tasks, committedSchedule = null) {
+function generateLocalProposal(tasks, committedSchedule = null, heatmap = null) {
+  const analyticsLookup = analyticsLookupFromHeatmap(heatmap);
   const sortedTasks = [...tasks]
     .filter((task) => task.status !== "Completed")
     .sort((a, b) => getPriorityScore(b) - getPriorityScore(a));
@@ -434,32 +460,26 @@ function generateLocalProposal(tasks, committedSchedule = null) {
   });
 
   for (const block of blocks) {
-    let placed = false;
-    for (const day of days) {
-      for (const slot of timeSlots) {
-        if (!generatedBlockFitsWindow(block, day, slot)) continue;
-        if (hasLockedConflict(schedule, day, slot)) continue;
-        const isMorning = slot === "09:00-10:30" || slot === "10:30-12:00";
-        if (block.difficulty === "Hard" && !isMorning) continue;
-        if (!schedule[day][slot]) {
-          schedule[day][slot] = { ...block, day, slot };
-          placed = true;
-          break;
-        }
-      }
-      if (placed) break;
-    }
-    if (!placed) {
-      outer: for (const day of days) {
-        for (const slot of timeSlots) {
-          if (!generatedBlockFitsWindow(block, day, slot)) continue;
-          if (hasLockedConflict(schedule, day, slot)) continue;
-          if (!schedule[day][slot]) {
-            schedule[day][slot] = { ...block, day, slot };
-            break outer;
-          }
-        }
-      }
+    const best = days
+      .flatMap((day) => timeSlots.map((slot) => ({ day, slot })))
+      .filter(({ day, slot }) => {
+        if (!generatedBlockFitsWindow(block, day, slot)) return false;
+        if (hasLockedConflict(schedule, day, slot)) return false;
+        return !schedule[day][slot];
+      })
+      .sort(
+        (a, b) =>
+          localSlotScore(block, b.day, b.slot, analyticsLookup) -
+          localSlotScore(block, a.day, a.slot, analyticsLookup)
+      )[0];
+    if (best) {
+      const p = analyticsLookup[`${best.day}|${best.slot}`] ?? 0.5;
+      schedule[best.day][best.slot] = {
+        ...block,
+        day: best.day,
+        slot: best.slot,
+        scoreBreakdown: { p_complete: Math.round(p * 100) / 100 },
+      };
     }
   }
   return schedule;
@@ -826,7 +846,7 @@ export default function App() {
     } catch {
       setBackendOnline(false);
       setProposal({
-        schedule: generateLocalProposal(tasks, committed),
+        schedule: generateLocalProposal(tasks, committed, heatmap),
         summary:
           "Generated with the local fallback heuristic because the Python engine was unreachable. Review and approve to apply it.",
         summarySource: "template",
@@ -982,6 +1002,28 @@ export default function App() {
     );
   }
 
+  async function undoBlockStatus(day, slot, previousStatus) {
+    if (!committed) return;
+    const updated = normalizeSchedule(structuredClone(committed));
+    if (!updated[day]?.[slot]) return;
+    updated[day][slot].status = "Scheduled";
+    persistCommitted(updated);
+    setSelectedBlock(null);
+    refreshCalendarView();
+
+    if (previousStatus === "Completed" || previousStatus === "Skipped") {
+      try {
+        const res = await undoFeedback(day, slot, previousStatus === "Completed");
+        setRecommendation(res.message);
+        refreshModel();
+        return;
+      } catch {
+        setBackendOnline(false);
+      }
+    }
+    setRecommendation("Status restored to scheduled.");
+  }
+
   // --- Ask the AI assistant (grounded Q&A about the plan) --------------
   async function askWhyBlock(block) {
     const sched = proposal ? proposal.schedule : committed;
@@ -1129,6 +1171,9 @@ export default function App() {
                     updateBlockStatus(selectedBlock.day, selectedBlock.slot, status);
                     setSelectedBlock(null);
                   }}
+                  onUndoStatus={() =>
+                    undoBlockStatus(selectedBlock.day, selectedBlock.slot, selectedBlock.status)
+                  }
                   onUnlock={() => unlockBlock(selectedBlock.day, selectedBlock.slot)}
                   onLock={() => lockBlock(selectedBlock.day, selectedBlock.slot)}
                 />
@@ -1512,10 +1557,12 @@ function TaskModal({
   onAskWhy,
   onClose,
   onStatusChange,
+  onUndoStatus,
   onUnlock,
   onLock,
 }) {
   const locked = isStableLocked(block);
+  const canUndoStatus = block.status === "Completed" || block.status === "Skipped";
   const canLockAgain = !locked && isManualBlock(block);
   const lockText =
     getLockReason(block) === "manual"
@@ -1579,17 +1626,27 @@ function TaskModal({
             <div className="flex gap-3">
               <button
                 onClick={() => onStatusChange("Completed")}
-                className="flex-1 bg-slate-950 text-white rounded-2xl px-4 py-3 font-semibold transition hover:-translate-y-0.5 hover:shadow-md"
+                disabled={block.status === "Completed"}
+                className="flex-1 bg-slate-950 text-white rounded-2xl px-4 py-3 font-semibold transition hover:-translate-y-0.5 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Mark Done
               </button>
               <button
                 onClick={() => onStatusChange("Skipped")}
-                className="flex-1 bg-white border border-slate-200 text-slate-900 rounded-2xl px-4 py-3 font-semibold transition hover:bg-slate-50"
+                disabled={block.status === "Skipped"}
+                className="flex-1 bg-white border border-slate-200 text-slate-900 rounded-2xl px-4 py-3 font-semibold transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Skip
               </button>
             </div>
+            {canUndoStatus && (
+              <button
+                onClick={onUndoStatus}
+                className="w-full rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 font-semibold text-amber-900 transition hover:bg-amber-100"
+              >
+                Undo {block.status === "Completed" ? "Done" : "Skip"}
+              </button>
+            )}
             {locked && (
               <button
                 onClick={onUnlock}

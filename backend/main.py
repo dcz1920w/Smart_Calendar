@@ -236,6 +236,22 @@ def feedback(ev: FeedbackEvent):
     return {"message": msg, "p": p}
 
 
+@app.post("/api/feedback/undo")
+def undo_feedback(ev: FeedbackEvent):
+    """Undo the latest matching Done/Skip feedback event."""
+    undone = model.undo_update(ev.day, ev.slot, ev.completed)
+    p = model.p_complete(ev.day, ev.slot)
+    return {
+        "undone": undone,
+        "message": (
+            f"Undone. {ev.day} {ev.slot} is back to {int(p*100)}% expected completion."
+            if undone else
+            "No matching feedback event was found to undo."
+        ),
+        "p": p,
+    }
+
+
 @app.get("/api/model")
 def get_model():
     return {"heatmap": model.heatmap(), "events": len(model.events)}

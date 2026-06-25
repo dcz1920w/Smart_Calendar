@@ -52,6 +52,13 @@ export function sendFeedback(day, slot, completed) {
   });
 }
 
+export function undoFeedback(day, slot, completed) {
+  return request("/feedback/undo", {
+    method: "POST",
+    body: JSON.stringify({ day, slot, completed }),
+  });
+}
+
 export function fetchModel() {
   return request("/model");
 }

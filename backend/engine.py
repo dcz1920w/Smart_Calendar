@@ -34,6 +34,7 @@ MODEL_PATH = os.path.join(os.path.dirname(__file__), "user_model.json")
 
 DIFFICULTY = {"Easy": 1, "Medium": 2, "Hard": 3}
 PRIORITY = {"Low": 1, "Medium": 2, "High": 3}
+DIFFICULTY_ANALYTICS_WEIGHT = {"Easy": 1.0, "Medium": 2.0, "Hard": 3.5}
 
 
 # --------------------------------------------------------------------------
@@ -131,6 +132,21 @@ class FocusModel:
             "t": datetime.now().isoformat(timespec="seconds"),
         })
         self.save()
+
+    def undo_update(self, day: str, slot: str, completed: bool | None = None) -> bool:
+        for index in range(len(self.events) - 1, -1, -1):
+            event = self.events[index]
+            if event.get("day") != day or event.get("slot") != slot:
+                continue
+            if completed is not None and event.get("completed") is not completed:
+                continue
+            removed = self.events.pop(index)
+            c = self.cells.setdefault(self.key(day, slot), {"succ": 0.0, "fail": 0.0})
+            field = "succ" if removed.get("completed") else "fail"
+            c[field] = max(0.0, c.get(field, 0.0) - 1.0)
+            self.save()
+            return True
+        return False
 
     # --- persistence -----------------------------------------------------
     def save(self):
@@ -349,23 +365,26 @@ class ScheduleOptimizer:
         if slot_duration > self.max_block_duration:
             return -1e9
 
-        # 1. learned focus probability, weighted by difficulty
+        # 1. learned analytics efficiency, weighted strongly by difficulty.
+        # Hard tasks should win the user's best-performing slots.
         p = self.model.p_complete(day, slot)
-        focus_term = p * (1.0 + 0.5 * (DIFFICULTY[block.difficulty] - 1))
+        difficulty_weight = DIFFICULTY_ANALYTICS_WEIGHT.get(block.difficulty, 2.0)
+        analytics_term = p * difficulty_weight
 
         # 2. deadline pressure: earlier placement for urgent tasks
         urgency = PRIORITY[block.priority] * 2 + DIFFICULTY[block.difficulty]
         day_idx = DAYS.index(day)
-        pressure_term = (urgency / 9.0) * (1.0 - day_idx / 7.0) * min(1.5, 3.0 / max(1, days_left))
+        deadline_pressure = min(1.5, 3.0 / max(1, days_left))
+        pressure_term = (urgency / 9.0) * (1.0 - day_idx / 7.0) * deadline_pressure
 
         # 3. preference: hard tasks inside the user's focus window
         pref_term = 0.0
         if block.difficulty == "Hard":
-            pref_term = 0.6 if period == self.focus_window else -0.2
+            pref_term = 0.35 if period == self.focus_window else -0.12
 
         # 4. workload balance: penalise overloaded days
         load = sum(1 for (d, _s), b in assignment.items() if d == day and b is not None)
-        balance_term = -0.45 * max(0, load - (self.max_per_day - 1))
+        balance_term = -0.35 * max(0, load - (self.max_per_day - 1))
         if load >= self.max_per_day:
             balance_term -= 2.0
 
@@ -374,9 +393,9 @@ class ScheduleOptimizer:
             1 for (d, _s), b in assignment.items()
             if d == day and b is not None and b.task_id == block.task_id
         )
-        spacing_term = -0.7 * same_task_today
+        spacing_term = -0.55 * same_task_today
 
-        total = (1.4 * focus_term + 1.2 * pressure_term + pref_term
+        total = (2.2 * analytics_term + 0.9 * pressure_term + pref_term
                  + balance_term + spacing_term)
         return total
 
@@ -429,10 +448,11 @@ class ScheduleOptimizer:
             locked_parts = self.locked_task_parts.get(str(t.get("id")), set())
             blocks.extend([b for b in _split(t, self.max_block_duration) if b.part not in locked_parts])
 
-        # most constrained / most urgent first
+        # Harder and more urgent blocks choose first, so they can claim the
+        # best analytics slots before easier work fills the calendar.
         def order_key(b: Block):
             dl = _days_until(b.deadline, self.week_monday)["Mon"]
-            return (dl, -PRIORITY[b.priority], -DIFFICULTY[b.difficulty])
+            return (-DIFFICULTY[b.difficulty], -PRIORITY[b.priority], dl)
         blocks.sort(key=order_key)
 
         assignment: dict[tuple[str, str], Block | None] = {
