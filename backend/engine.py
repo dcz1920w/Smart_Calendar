@@ -273,6 +273,14 @@ def _is_previously_moved_block(block: dict | None) -> bool:
     return "You moved this block yourself" in str((block or {}).get("explanation", ""))
 
 
+def _is_completed_block(block: dict | None) -> bool:
+    return (block or {}).get("status") == "Completed"
+
+
+def _is_skipped_block(block: dict | None) -> bool:
+    return (block or {}).get("status") == "Skipped"
+
+
 def _is_stable_locked(block: dict | None) -> bool:
     if not block:
         return False
@@ -284,7 +292,7 @@ def _is_stable_locked(block: dict | None) -> bool:
 
 
 def _is_reserved_block(block: dict | None) -> bool:
-    return _is_stable_locked(block) or _is_manual_block(block)
+    return _is_stable_locked(block) or _is_manual_block(block) or _is_completed_block(block)
 
 
 def _lock_reason(block: dict) -> str:
@@ -298,7 +306,7 @@ def _lock_reason(block: dict) -> str:
 
 
 def _reserved_block(block: dict, day: str, slot: str) -> dict:
-    locked = _is_stable_locked(block)
+    locked = _is_stable_locked(block) or _is_completed_block(block)
     next_block = {
         **block,
         "day": day,
@@ -336,6 +344,7 @@ class ScheduleOptimizer:
         self.now = datetime.now()
         self.locked_slots = self._locked_slots(prefs.get("lockedSchedule"))
         self.locked_task_parts = self._locked_task_parts(self.locked_slots)
+        self._merge_locked_task_parts(prefs.get("lockedTaskParts"))
 
     @staticmethod
     def _monday(week_start: str | None) -> date:
@@ -437,6 +446,15 @@ class ScheduleOptimizer:
                 part = 1
             parts.setdefault(str(task_id), set()).add(part)
         return parts
+
+    def _merge_locked_task_parts(self, extra_parts: dict | None):
+        for task_id, raw_parts in (extra_parts or {}).items():
+            parts = self.locked_task_parts.setdefault(str(task_id), set())
+            for raw_part in raw_parts or []:
+                try:
+                    parts.add(int(raw_part))
+                except (TypeError, ValueError):
+                    continue
 
     # --- construction + local search --------------------------------------
     def solve(self, tasks: list[dict], iters: int = 800, seed: int = 7):

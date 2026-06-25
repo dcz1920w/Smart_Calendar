@@ -25,6 +25,7 @@ from engine import (
     _deadline_end,
     _is_manual_block,
     _is_reserved_block,
+    _is_skipped_block,
     _reserved_block,
     _slot_datetimes,
 )
@@ -101,7 +102,7 @@ class ExplainRequest(BaseModel):
 
 # ---------- helpers ----------
 def _generated_block_fits_window(block: dict, day: str, slot: str, tasks_by_id: dict[str, dict]) -> bool:
-    if _is_manual_block(block):
+    if _is_manual_block(block) or block.get("status") == "Completed" or _is_skipped_block(block):
         return True
 
     task = tasks_by_id.get(str(block.get("taskId")))
@@ -130,6 +131,26 @@ def _locked_schedule(grid: dict | None, tasks: list[dict] | None = None) -> dict
                 continue
             locked[d][s] = _reserved_block(b, d, s)
     return locked
+
+
+def _proposal_protected_task_parts(grid: dict | None, tasks: list[dict] | None = None) -> dict[str, list[int]]:
+    task_ids = {str(task.get("id")) for task in (tasks or [])}
+    parts: dict[str, set[int]] = {}
+    for d in DAYS:
+        for _s, b in (grid or {}).get(d, {}).items():
+            if not b or _is_manual_block(b):
+                continue
+            if not (_is_reserved_block(b) or _is_skipped_block(b)):
+                continue
+            task_id = str(b.get("taskId"))
+            if task_id not in task_ids:
+                continue
+            try:
+                part = int(b.get("part", 1))
+            except (TypeError, ValueError):
+                part = 1
+            parts.setdefault(task_id, set()).add(part)
+    return {task_id: sorted(values) for task_id, values in parts.items()}
 
 
 def _plan_list(grid: dict) -> list[dict]:
@@ -167,6 +188,7 @@ def propose(req: ProposeRequest):
     task_payload = [t.model_dump() for t in req.tasks]
     locked = _locked_schedule(req.committedSchedule, task_payload)
     prefs["lockedSchedule"] = locked
+    prefs["lockedTaskParts"] = _proposal_protected_task_parts(req.committedSchedule, task_payload)
     opt = ScheduleOptimizer(model, prefs)
     assignment, unplaced, score = opt.solve(task_payload)
 

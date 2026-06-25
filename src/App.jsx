@@ -102,6 +102,14 @@ function isPreviouslyMovedBlock(block) {
   return String(block?.explanation ?? "").includes("You moved this block yourself");
 }
 
+function isCompletedBlock(block) {
+  return block?.status === "Completed";
+}
+
+function isSkippedBlock(block) {
+  return block?.status === "Skipped";
+}
+
 function isStableLocked(block) {
   if (!block) return false;
   if (block.stableLocked === false) return false;
@@ -118,11 +126,11 @@ function getLockReason(block) {
 }
 
 function isReservedForProposal(block) {
-  return isStableLocked(block) || isManualBlock(block);
+  return isStableLocked(block) || isManualBlock(block) || isCompletedBlock(block);
 }
 
 function normalizeReservedBlock(block, day, slot) {
-  const locked = isStableLocked(block);
+  const locked = isStableLocked(block) || isCompletedBlock(block);
   const next = {
     ...block,
     day,
@@ -142,7 +150,7 @@ function taskMapFrom(tasks = []) {
 }
 
 function reservedBlockFitsProposalWindow(block, day, slot, tasksById = new Map()) {
-  if (isManualBlock(block)) return true;
+  if (isManualBlock(block) || isCompletedBlock(block) || isSkippedBlock(block)) return true;
   const task = tasksById.get(String(block?.taskId ?? ""));
   if (!task) return false;
   return generatedBlockFitsWindow({ ...block, deadline: block.deadline ?? task.deadline }, day, slot);
@@ -191,6 +199,11 @@ function mergeLockedSchedules(schedule, committed, tasks = []) {
     if (!hasLockedConflict(reserved, day, slot)) return;
     delete next[day][slot];
   });
+  iterateSchedule(committed, (day, slot, block) => {
+    if (!isSkippedBlock(block)) return;
+    if (hasSlotConflict(next, day, slot)) return;
+    next[day][slot] = { ...block, day, slot };
+  });
   return next;
 }
 
@@ -198,8 +211,14 @@ function lockedTaskPartsFrom(schedule, tasks = []) {
   const tasksById = taskMapFrom(tasks);
   const locked = {};
   iterateSchedule(schedule, (day, slot, block) => {
-    if (!isStableLocked(block) || isManualBlock(block) || block.taskId == null) return;
-    if (!reservedBlockFitsProposalWindow(block, day, slot, tasksById)) return;
+    if (
+      (!isStableLocked(block) && !isCompletedBlock(block) && !isSkippedBlock(block)) ||
+      isManualBlock(block) ||
+      block.taskId == null
+    ) {
+      return;
+    }
+    if (!tasksById.has(String(block.taskId))) return;
     const part = Number(block.part ?? 1);
     if (!Number.isFinite(part)) return;
     const taskId = String(block.taskId);
@@ -1483,14 +1502,25 @@ function FactChips({ block }) {
 }
 
 function ScheduleModal({ draft, onClose, onSave }) {
+  const parsedDraftSlot = parseSlot(draft.slot);
   const [title, setTitle] = useState("");
   const [course, setCourse] = useState("Custom Study");
+  const [day, setDay] = useState(draft.day);
+  const [startTime, setStartTime] = useState(
+    `${pad2(parsedDraftSlot.startHour)}:${pad2(parsedDraftSlot.startMinute)}`
+  );
+  const [endTime, setEndTime] = useState(
+    `${pad2(parsedDraftSlot.endHour)}:${pad2(parsedDraftSlot.endMinute)}`
+  );
+
+  const validTimeRange = minutesFromClock(startTime) < minutesFromClock(endTime);
 
   function handleSubmit(event) {
     event.preventDefault();
+    if (!validTimeRange) return;
     onSave({
-      day: draft.day,
-      slot: draft.slot,
+      day,
+      slot: `${startTime}-${endTime}`,
       title,
       course,
     });
@@ -1504,7 +1534,7 @@ function ScheduleModal({ draft, onClose, onSave }) {
       >
         <h3 className="text-2xl font-bold text-slate-950 mb-1">Add Schedule</h3>
         <p className="text-sm text-slate-500 mb-5">
-          {draft.day} · {draft.slot}
+          {day} · {startTime}-{endTime}
         </p>
 
         <div className="space-y-4">
@@ -1527,12 +1557,54 @@ function ScheduleModal({ draft, onClose, onSave }) {
               onChange={(event) => setCourse(event.target.value)}
             />
           </div>
+
+          <div>
+            <Label>Day</Label>
+            <select
+              className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2 text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+              value={day}
+              onChange={(event) => setDay(event.target.value)}
+            >
+              {days.map((option) => (
+                <option key={option}>{option}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Start Time</Label>
+              <input
+                type="time"
+                step="900"
+                className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2 text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+                value={startTime}
+                onChange={(event) => setStartTime(event.target.value)}
+              />
+            </div>
+            <div>
+              <Label>End Time</Label>
+              <input
+                type="time"
+                step="900"
+                className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-3 py-2 text-slate-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+                value={endTime}
+                onChange={(event) => setEndTime(event.target.value)}
+              />
+            </div>
+          </div>
+
+          {!validTimeRange && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">
+              End time must be later than start time.
+            </div>
+          )}
         </div>
 
         <div className="mt-6 flex gap-3">
           <button
             type="submit"
-            disabled={!title.trim()}
+            disabled={!title.trim() || !validTimeRange}
             className="flex-1 bg-slate-950 text-white rounded-2xl px-4 py-3 font-semibold transition hover:-translate-y-0.5 hover:shadow-md disabled:opacity-50"
           >
             Add
@@ -1819,6 +1891,7 @@ function CalendarPage({
 }) {
   const isProposal = !!proposal;
   const schedule = isProposal ? proposal.schedule : committed;
+  const calendarSchedule = schedule ?? normalizeSchedule(null);
   const diff = isProposal ? classifyProposal(committed, proposal.schedule) : null;
   const draggable = !isProposal && !!committed;
   const weekStart = useMemo(() => startOfCurrentWeek(), []);
@@ -1828,7 +1901,7 @@ function CalendarPage({
   const lastDateClickRef = useRef(null);
   const calendarEvents = useMemo(() => {
     const events = [];
-    iterateSchedule(schedule, (day, slot, block) => {
+    iterateSchedule(calendarSchedule, (day, slot, block) => {
       const { start, end } = datesFromDaySlot(day, slot, weekStart);
       const kind = diff?.map[`${day}|${slot}`];
       const colors = getCalendarEventColors(block);
@@ -1865,7 +1938,7 @@ function CalendarPage({
       });
     });
     return events;
-  }, [schedule, diff, weekStart, draggable]);
+  }, [calendarSchedule, diff, weekStart, draggable]);
 
   useEffect(() => {
     const api = calendarRef.current?.getApi();
@@ -1925,11 +1998,14 @@ function CalendarPage({
   }
 
   function handleDateClick(info) {
-    const clickedAt = info.date.getTime();
     const now = Date.now();
     const last = lastDateClickRef.current;
+    const clickedAt = info.date.getTime();
+    const clickedInsideLastSelection =
+      last && clickedAt >= last.start.getTime() && clickedAt < last.end.getTime();
     const isDoubleClick =
-      last && last.clickedAt === clickedAt && now - last.time < 350;
+      info.jsEvent?.detail >= 2 ||
+      (last && clickedInsideLastSelection && now - last.time < 500);
 
     if (clickTimerRef.current) {
       window.clearTimeout(clickTimerRef.current);
@@ -1937,18 +2013,31 @@ function CalendarPage({
     }
 
     if (isDoubleClick) {
+      const addFrom = last?.start ?? info.date;
       lastDateClickRef.current = null;
-      requestScheduleAddFromDate(info.date);
+      requestScheduleAddFromDate(addFrom);
       return;
     }
 
-    selectCalendarSlot(info.date);
+    const end = selectCalendarSlot(info.date);
     refreshFullCalendar();
-    lastDateClickRef.current = { clickedAt, time: now };
+    lastDateClickRef.current = { start: info.date, end, time: now };
     clickTimerRef.current = window.setTimeout(() => {
       lastDateClickRef.current = null;
       clickTimerRef.current = null;
-    }, 350);
+    }, 500);
+  }
+
+  function handleCalendarDoubleClick(event) {
+    if (isProposal || event.target.closest(".fc-event")) return;
+    const last = lastDateClickRef.current;
+    if (!last) return;
+    if (clickTimerRef.current) {
+      window.clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
+    lastDateClickRef.current = null;
+    requestScheduleAddFromDate(last.start);
   }
 
   function renderEventContent(info) {
@@ -2009,7 +2098,7 @@ function CalendarPage({
               ? "This is a proposal. Review it, then approve to apply — or reject to keep your calendar as is."
               : committed
               ? "Your approved plan. Drag a block to adjust it, or click it to ask the assistant why."
-              : "No plan yet. Add tasks and propose a plan to get started."}
+              : "Your calendar is ready for direct schedule blocks."}
           </p>
         </div>
 
@@ -2090,49 +2179,46 @@ function CalendarPage({
 
       {schedule && <AskBox planQA={planQA} onAsk={onAskAboutPlan} llmAvailable={llmAvailable} />}
 
-      {!schedule ? (
-        <div className="text-slate-500 text-center py-16">
-          Nothing scheduled yet. Click “Propose a Plan” to let the assistant draft your week.
-        </div>
-      ) : (
-        <div className="study-calendar rounded-[1.75rem] border border-slate-200 bg-white p-3 shadow-sm">
-          <FullCalendar
-            ref={calendarRef}
-            plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-            initialView="timeGridWeek"
-            initialDate={initialDate}
-            headerToolbar={{
-              left: "prev,next today",
-              center: "title",
-              right: "timeGridWeek,dayGridMonth",
-            }}
-            allDaySlot={false}
-            weekends
-            nowIndicator
-            selectable={!isProposal}
-            editable={draggable}
-            eventResizableFromStart={draggable}
-            eventOverlap={false}
-            selectOverlap={false}
-            selectMirror
-            slotMinTime="07:00:00"
-            slotMaxTime="23:00:00"
-            slotDuration="00:15:00"
-            snapDuration="00:15:00"
-            expandRows
-            height={calendarExpanded ? "auto" : 760}
-            events={calendarEvents}
-            eventContent={renderEventContent}
-            eventClick={(info) => {
-              onOpenBlock(info.event.extendedProps.block);
-              refreshFullCalendar();
-            }}
-            eventDrop={handleCalendarChange}
-            eventResize={handleCalendarChange}
-            dateClick={handleDateClick}
-          />
-        </div>
-      )}
+      <div
+        className="study-calendar rounded-[1.75rem] border border-slate-200 bg-white p-3 shadow-sm"
+        onDoubleClick={handleCalendarDoubleClick}
+      >
+        <FullCalendar
+          ref={calendarRef}
+          plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+          initialView="timeGridWeek"
+          initialDate={initialDate}
+          headerToolbar={{
+            left: "prev,next today",
+            center: "title",
+            right: "timeGridWeek,dayGridMonth",
+          }}
+          allDaySlot={false}
+          weekends
+          nowIndicator
+          selectable={!isProposal}
+          editable={draggable}
+          eventResizableFromStart={draggable}
+          eventOverlap={false}
+          selectOverlap={false}
+          selectMirror
+          slotMinTime="07:00:00"
+          slotMaxTime="23:00:00"
+          slotDuration="00:15:00"
+          snapDuration="00:15:00"
+          expandRows
+          height={calendarExpanded ? "auto" : 760}
+          events={calendarEvents}
+          eventContent={renderEventContent}
+          eventClick={(info) => {
+            onOpenBlock(info.event.extendedProps.block);
+            refreshFullCalendar();
+          }}
+          eventDrop={handleCalendarChange}
+          eventResize={handleCalendarChange}
+          dateClick={handleDateClick}
+        />
+      </div>
     </section>
   );
 }
